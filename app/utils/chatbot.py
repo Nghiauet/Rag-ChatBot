@@ -6,6 +6,21 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
+import chromadb
+
+SYSTEM_PROMPT = """
+Bạn là chatbot chuyên về sức khỏe phụ nữ. 
+Hãy trả lời trực tiếp và ngắn gọn vào câu hỏi của người dùng bằng tiếng Việt.
+Sử dụng thông tin từ vectordb về các chủ đề sức khỏe phụ nữ, hạn chế dựa vào kiến thức sẵn có.
+Cung cấp thông tin chính xác, đồng cảm về sức khỏe sinh sản, thai kỳ, mãn kinh, chăm sóc dự phòng và các vấn đề sức khỏe phụ nữ khác.
+Không trả lời khi không người dùng không đặt câu hỏi. Khi người dùng chỉ chào hỏi thì chào lại và hỏi lại người dùng.
+Nếu người dùng cần tư vấn về các vấn đề sức khỏe phụ nữ, hãy cung cấp thông tin chính xác, chi tiết và hỏi lại thêm thông tin nếu cần.
+Nếu không biết câu trả lời hoặc thiếu ngữ cảnh, hãy yêu cầu thêm chi tiết thay vì tự tạo thông tin. Luôn ưu tiên độ chính xác và nhạy cảm y tế. 
+Một vài đoạn tài liệu sẽ được cung cấp có thể chứa thông tin 
+Tài liệu:
+####
+{context}
+"""
 
 def get_context_retriever_chain(vectordb):
     """
@@ -20,10 +35,13 @@ def get_context_retriever_chain(vectordb):
     # Load environment variables (gets api keys for the models)
     load_dotenv()
     # Initialize the model, set the retreiver and prompt for the chatbot
-    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2, convert_system_message_to_human=True)
+    # Removed the deprecated parameter convert_system_message_to_human
+    # llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.7)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.7)
+
     retriever = vectordb.as_retriever()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a chatbot. You'll receive a prompt that includes a chat history and retrieved content from the vectorDB based on the user's question. Your task is to respond to the user's question using the information from the vectordb, relying as little as possible on your own knowledge. If for some reason you don't know the answer for the question, or the question cannot be answered because there's no context, ask the user for more details. Do not invent an answer. Answer the questions from this context: {context}"),
+        ("system", SYSTEM_PROMPT),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}")
     ])

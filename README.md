@@ -62,3 +62,7 @@ streamlit run app/app.py
 ```
 
 A new window on your web browser should automatically appear, with the app ready to be used. To stop the app, simply press CTR+C on the terminal. A message of "stopping" will appear, and the app will shutdown
+
+```shell
+streamlit run app/app.py --server.port 8083
+```

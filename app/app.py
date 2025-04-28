@@ -7,12 +7,12 @@ from utils.chatbot import chat
 
 class ChatApp:
     """
-    A Streamlit application for chatting with PDF documents
+    A Streamlit application for a women's healthcare chatbot
 
-    This class encapsulates the functionality for uploading PDF documents, processing them,
-    and enabling users to chat with the documents using a chatbot. It handles the initialization
-    of Streamlit configurations and session state variables, as well as the frontend for document
-    upload and chat interaction
+    This class encapsulates the functionality for uploading PDF documents related to women's health,
+    processing them, and enabling users to chat with a specialized healthcare assistant. It handles 
+    the initialization of Streamlit configurations and session state variables, as well as the frontend 
+    for document upload and healthcare consultation interactions.
     """
     def __init__(self):
         """
@@ -26,17 +26,17 @@ class ChatApp:
             os.makedirs("docs")
 
         # Configurations and session state initialization
-        st.set_page_config(page_title="Chat with PDFS :books:")
-        st.title("Chat with PDFS :books:")
+        st.set_page_config(page_title="Women's Health Assistant")
+        st.title("Women's Health Assistant")
         initialize_session_state_variables(st)
         self.docs_files = st.session_state.processed_documents
 
     def run(self):
         """
-        Runs the Streamlit app for chatting with PDFs
+        Runs the Streamlit app for the women's health chatbot
 
-        This method handles the frontend for document upload, unlocks the chat when documents are uploaded,
-        and locks the chat until documents are uploaded
+        This method handles the frontend for document upload, unlocks the chat when healthcare
+        documents are uploaded, and locks the chat until documents are uploaded
         """
         upload_docs = os.listdir("docs")
         # Sidebar frontend for document upload

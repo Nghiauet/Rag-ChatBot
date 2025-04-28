@@ -49,7 +49,7 @@ def get_vectorstore(pdfs, from_session_state=False):
     - vectordb or None: The created or retrieved vectorstore. Returns None if loading from session state and the database does not exist
     """
     load_dotenv()
-    embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    embedding = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
     if from_session_state and os.path.exists("Vector_DB - Documents"):
         # Retrieve vectorstore from existing one
         vectordb = Chroma(persist_directory="Vector_DB - Documents", embedding_function=embedding)
