@@ -1,6 +1,9 @@
-streamlit
 pypdf
-langchain
+langchain==0.3.25
 python-dotenv
-chromadb
+chromadb==1.0.9
 langchain-google-genai==2.1.0
+google-genai==1.7   
+langchain-community==0.3.24
+fastapi
+uvicorn
