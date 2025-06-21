@@ -61,3 +61,19 @@ def get_vectorstore(pdfs, from_session_state=False):
         vectordb = Chroma.from_documents(documents=chunks, embedding=embedding, persist_directory="Vector_DB - Documents")
         return vectordb
     return None
+
+if __name__ == "__main__":
+    # Ensure the docs folder exists
+    if not os.path.exists("docs"):
+        os.makedirs("docs")
+        print("Created 'docs' directory. Please add PDF documents to this folder.")
+    else:
+        # Get list of PDF files in the docs folder
+        pdf_files = [f for f in os.listdir("docs") if f.lower().endswith('.pdf')]
+        
+        if not pdf_files:
+            print("No PDF documents found in the 'docs' folder. Please add documents before running.")
+        else:
+            print(f"Found {len(pdf_files)} PDF documents. Preparing vector database...")
+            vectordb = get_vectorstore(pdf_files)
+            print("Vector database preparation complete.")

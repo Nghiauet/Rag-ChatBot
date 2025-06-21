@@ -18,9 +18,6 @@ COPY . .
 # Create docs directory if it doesn't exist
 RUN mkdir -p /app/docs
 
-# For testing: Create a sample document so the app can start
-# Remove this in production and mount real documents
-RUN echo "This is a sample document" > /app/docs/sample.pdf
 
 # Expose the port that FastAPI will run on
 EXPOSE 8300
