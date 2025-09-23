@@ -174,3 +174,5 @@ curl -X DELETE "http://localhost:8300/history/0001"
 
 Check the API server logs for detailed error information.
 
+# build 
+docker build -t medical-chatbot-api:0.0.2 .             

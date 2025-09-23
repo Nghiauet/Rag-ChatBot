@@ -137,8 +137,13 @@ class HealthAssistantAPI:
             clear_chat_history(session_id)
             return {"message": f"Chat history for session {session_id} has been cleared"}
         
-        return app
+        # add health check endpoint
+        @app.get("/health")
+        async def health_check():
+            return {"status": "healthy"}
     
+        return app
+
     def _cleanup_expired_sessions(self):
         """
         Remove sessions that have been inactive for longer than the timeout period

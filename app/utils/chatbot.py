@@ -7,7 +7,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
 import chromadb
 from typing import Dict, List, Tuple, Any
-
+import os
 SYSTEM_PROMPT = """
 Bạn là chatbot chuyên về sức khỏe phụ nữ. 
 Nhiệm vụ của bạn là trả lời các câu hỏi về sức khỏe phụ nữ một cách chính xác, hữu ích và đồng cảm.
@@ -47,7 +47,8 @@ def get_context_retriever_chain(vectordb):
     - retrieval_chain: Context retriever chain for generating responses
     """
     load_dotenv()
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.7)
+    MODEL = os.getenv("MODEL")
+    llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0.2)
 
     retriever = vectordb.as_retriever()
     prompt = ChatPromptTemplate.from_messages([
