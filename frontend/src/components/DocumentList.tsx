@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { documentAPI, DocumentInfo } from '@/lib/api';
+import { documentAPI, DocumentInfo, embeddingAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 interface DocumentListProps {
@@ -12,6 +12,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
 
   const fetchDocuments = async () => {
     try {
@@ -76,6 +77,25 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     });
   };
 
+  const handleRebuildEmbeddings = async () => {
+    if (!confirm('Are you sure you want to rebuild embeddings? This may take a few minutes depending on the number of documents.')) {
+      return;
+    }
+
+    try {
+      setRebuildingEmbeddings(true);
+      const result = await embeddingAPI.rebuildEmbeddings();
+      toast.success(`${result.message}\nProcessed: ${result.documents_processed.join(', ')}`, {
+        duration: 5000,
+      });
+    } catch (error: any) {
+      console.error('Rebuild embeddings error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to rebuild embeddings');
+    } finally {
+      setRebuildingEmbeddings(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
@@ -98,9 +118,28 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     <div className="w-full max-w-4xl mx-auto">
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 border-b">
-          <h3 className="text-lg font-medium text-gray-900">
-            Documents ({documents.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">
+              Documents ({documents.length})
+            </h3>
+            <button
+              onClick={handleRebuildEmbeddings}
+              disabled={rebuildingEmbeddings || documents.length === 0}
+              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              {rebuildingEmbeddings ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Rebuilding...</span>
+                </>
+              ) : (
+                <>
+                  <span>🔄</span>
+                  <span>Rebuild Embeddings</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="divide-y divide-gray-200">

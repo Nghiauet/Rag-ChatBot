@@ -1,7 +1,14 @@
 from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 model = "model"
-client = OpenAI(api_key="ragflow-FhMjA0M2FjOThhNTExZjBhMzg1NDIwMT", base_url=f"https://demo.ragflow.io/api/v1/chats_openai/test_2")
+client = OpenAI(
+    api_key=os.getenv("RAGFLOW_API_KEY"),
+    base_url=f"https://demo.ragflow.io/api/v1/chats_openai/test_2"
+)
 
 stream = True
 reference = True

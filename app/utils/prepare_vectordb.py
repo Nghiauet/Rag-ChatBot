@@ -2,8 +2,11 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_google_genai._common import GoogleGenerativeAIError
 from dotenv import load_dotenv
 import os
+import time
+import logging
 
 def extract_pdf_text(pdfs):
     """
@@ -33,34 +36,89 @@ def get_text_chunks(docs):
     - chunks: List of text chunks
     """
     # Chunk size is configured to be an approximation to the model limit of 2048 tokens
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=800, separators=["\n\n", "\n", " ", ""])
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=8000, chunk_overlap=800, separators=["\n\n", "\n", " ", ""])
     chunks = text_splitter.split_documents(docs)
     return chunks
 
-def get_vectorstore(pdfs, from_session_state=True):
+def get_vectorstore(pdfs, from_session_state=False, max_retries=3, retry_delay=5):
     """
-    Create or retrieve a vectorstore from PDF documents
+    Create or retrieve a vectorstore from PDF documents with error handling
 
     Parameters:
     - pdfs (list): List of PDF documents
     - from_session_state (bool, optional): Flag indicating whether to load from session state. Defaults to False
+    - max_retries (int): Maximum number of retries for embedding failures. Defaults to 3
+    - retry_delay (int): Delay in seconds between retries. Defaults to 5
 
     Returns:
     - vectordb or None: The created or retrieved vectorstore. Returns None if loading from session state and the database does not exist
+
+    Raises:
+    - Exception: If embedding creation fails after all retries
     """
     load_dotenv()
-    # print the api key
-    embedding = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    embedding = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
     if from_session_state and os.path.exists("Vector_DB - Documents"):
-        # Retrieve vectorstore from existing one
-        vectordb = Chroma(persist_directory="Vector_DB - Documents", embedding_function=embedding)
-        return vectordb
-    elif not from_session_state:
+        try:
+            # Retrieve vectorstore from existing one
+            vectordb = Chroma(persist_directory="Vector_DB - Documents", embedding_function=embedding)
+            return vectordb
+        except Exception as e:
+            logging.warning(f"Failed to load existing vector database: {e}")
+            logging.info("Will attempt to create new vector database")
+            # Fall through to create new database
+
+    if not from_session_state or not os.path.exists("Vector_DB - Documents"):
         docs = extract_pdf_text(pdfs)
         chunks = get_text_chunks(docs)
-        # Create vectorstore from chunks and saves it to the folder Vector_DB - Documents
-        vectordb = Chroma.from_documents(documents=chunks, embedding=embedding, persist_directory="Vector_DB - Documents")
-        return vectordb
+
+        # Retry logic for embedding creation
+        for attempt in range(max_retries):
+            try:
+                # Create vectorstore from chunks and saves it to the folder Vector_DB - Documents
+                vectordb = Chroma.from_documents(
+                    documents=chunks,
+                    embedding=embedding,
+                    persist_directory="Vector_DB - Documents"
+                )
+                logging.info(f"Successfully created vector database on attempt {attempt + 1}")
+                return vectordb
+
+            except GoogleGenerativeAIError as e:
+                error_msg = str(e).lower()
+
+                if "quota" in error_msg or "429" in error_msg:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                        logging.warning(f"API quota exceeded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception(f"API quota exceeded after {max_retries} attempts. Please check your Google API billing and quota limits.")
+
+                elif "rate" in error_msg:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (attempt + 1)
+                        logging.warning(f"Rate limit hit (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception(f"Rate limit exceeded after {max_retries} attempts. Please wait and try again later.")
+
+                else:
+                    # Other Google API errors
+                    raise Exception(f"Google API error: {e}")
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay
+                    logging.warning(f"Embedding creation failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception(f"Failed to create embeddings after {max_retries} attempts: {e}")
+
     return None
 
 if __name__ == "__main__":

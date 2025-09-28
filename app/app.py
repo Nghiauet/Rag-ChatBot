@@ -5,8 +5,8 @@ from pydantic import BaseModel
 import os
 import shutil
 from pathlib import Path
-from utils.prepare_vectordb import get_vectorstore
-from utils.chatbot import get_answer_with_history, get_chat_history, clear_chat_history
+from app.utils.prepare_vectordb import get_vectorstore
+from app.utils.chatbot import get_answer_with_history, get_chat_history, clear_chat_history
 import uvicorn
 from typing import List, Dict, Optional
 from uuid import uuid4
@@ -209,14 +209,39 @@ class HealthAssistantAPI:
                     shutil.copyfileobj(file.file, buffer)
 
                 # Reload vector database with new document
-                self.upload_docs = os.listdir("docs")
-                self.vectordb = get_vectorstore(self.upload_docs)
+                self.upload_docs = [f for f in os.listdir("docs") if f.lower().endswith('.pdf')]
+                try:
+                    self.vectordb = get_vectorstore(self.upload_docs)
+                    return UploadResponse(
+                        message=f"Document {file.filename} uploaded and indexed successfully",
+                        filename=file.filename
+                    )
+                except Exception as embedding_error:
+                    # File uploaded but embedding failed
+                    error_msg = str(embedding_error)
+                    if "quota" in error_msg.lower() or "429" in error_msg:
+                        return UploadResponse(
+                            message=f"Document {file.filename} uploaded but indexing failed due to API quota limits. Please rebuild embeddings later.",
+                            filename=file.filename
+                        )
+                    elif "rate" in error_msg.lower():
+                        return UploadResponse(
+                            message=f"Document {file.filename} uploaded but indexing failed due to rate limits. Please wait and rebuild embeddings.",
+                            filename=file.filename
+                        )
+                    else:
+                        return UploadResponse(
+                            message=f"Document {file.filename} uploaded but indexing failed: {error_msg}. Please rebuild embeddings manually.",
+                            filename=file.filename
+                        )
 
-                return UploadResponse(
-                    message=f"Document {file.filename} uploaded successfully",
-                    filename=file.filename
-                )
             except Exception as e:
+                # Clean up file if it was created but processing failed
+                if file_path.exists():
+                    try:
+                        file_path.unlink()
+                    except:
+                        pass
                 raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
         @app.delete("/api/documents/{filename}")
@@ -274,6 +299,49 @@ class HealthAssistantAPI:
                 return {"message": "Prompts updated successfully"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error updating prompts: {str(e)}")
+
+        # Embedding management endpoints
+        @app.post("/api/embeddings/rebuild")
+        async def rebuild_embeddings():
+            try:
+                # Get current PDF documents in docs folder
+                all_files = os.listdir("docs")
+                self.upload_docs = [f for f in all_files if f.lower().endswith('.pdf')]
+
+                if not self.upload_docs:
+                    raise HTTPException(status_code=400, detail="No PDF documents found in docs folder")
+
+                # Rebuild vector database with retry logic
+                try:
+                    self.vectordb = get_vectorstore(self.upload_docs, from_session_state=False)
+                    return {
+                        "message": f"Embeddings rebuilt successfully for {len(self.upload_docs)} documents",
+                        "documents_processed": self.upload_docs
+                    }
+                except Exception as embedding_error:
+                    error_msg = str(embedding_error)
+
+                    if "quota" in error_msg.lower() or "429" in error_msg:
+                        raise HTTPException(
+                            status_code=429,
+                            detail="API quota exceeded. Please check your Google API billing and quota limits, then try again later."
+                        )
+                    elif "rate" in error_msg.lower():
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Rate limit exceeded. Please wait a few minutes and try again."
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to create embeddings: {error_msg}"
+                        )
+
+            except HTTPException:
+                # Re-raise HTTP exceptions as-is
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error rebuilding embeddings: {str(e)}")
 
         # add health check endpoint
         @app.get("/health")

@@ -5,7 +5,7 @@ services:
     ports:
       - "8300:8300"
     environment:
-      - GOOGLE_API_KEY=AIzaSyD0HS_36V5C-xsniZwdkH-l16f6CjKs2Do
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
       - ./docs:/app/docs
       - ./Vector_DB - Documents:/app/Vector_DB - Documents
