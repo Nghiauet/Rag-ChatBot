@@ -14,6 +14,19 @@ import time
 from datetime import datetime
 from dotenv import load_dotenv
 import yaml
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Define request and response models
 class QueryRequest(BaseModel):
@@ -61,29 +74,41 @@ class HealthAssistantAPI:
     def __init__(self):
         """
         Initializes the HealthAssistantAPI class
-        
+
         This method ensures the existence of the 'docs' folder and loads the vector database
         """
+        logger.info("Initializing HealthAssistantAPI...")
+
         # Fix for protobuf compatibility issue
         os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-        
+
         # Ensure the docs folder exists
         if not os.path.exists("docs"):
+            logger.info("Creating docs folder...")
             os.makedirs("docs")
-            
+        else:
+            logger.info("Docs folder exists")
+
         # Load documents from the docs folder
         self.upload_docs = os.listdir("docs")
+        logger.info(f"Found {len(self.upload_docs)} files in docs folder")
+
         if not self.upload_docs:
+            logger.error("No documents found in the 'docs' folder")
             raise Exception("No documents found in the 'docs' folder. Please add documents before starting the API.")
-            
+
         # Load the vector database
+        logger.info("Loading vector database...")
         self.vectordb = get_vectorstore(self.upload_docs)
-        
+        logger.info("Vector database loaded successfully")
+
         # Track active sessions and their last activity time
         self.active_sessions = {}
-        
+
         # Session timeout in seconds (30 minutes)
         self.session_timeout = 30 * 60
+
+        logger.info("HealthAssistantAPI initialization completed")
         
     def create_app(self):
         """
@@ -113,27 +138,34 @@ class HealthAssistantAPI:
         
         @app.post("/query", response_model=QueryResponse)
         async def query(request: QueryRequest):
+            logger.info(f"Received query request for session: {request.session_id}")
+
             # Clean up expired sessions
             self._cleanup_expired_sessions()
-            
+
             if not request.question:
+                logger.warning("Empty question received")
                 raise HTTPException(status_code=400, detail="Question cannot be empty")
-            
+
             # Create or use provided session ID
             session_id = request.session_id or str(uuid4())
-            
+            logger.info(f"Processing query for session: {session_id}")
+
             # Update session activity time
             self.active_sessions[session_id] = time.time()
-                
+
             try:
                 # Get answer with conversation history
+                logger.debug(f"Getting answer for question: {request.question[:100]}...")
                 answer, sources, _ = get_answer_with_history(
-                    session_id, 
-                    request.question, 
+                    session_id,
+                    request.question,
                     self.vectordb
                 )
+                logger.info(f"Successfully processed query for session: {session_id}")
                 return QueryResponse(answer=answer, session_id=session_id, sources=sources)
             except Exception as e:
+                logger.error(f"Error processing query for session {session_id}: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
         
         @app.get("/history/{session_id}", response_model=ChatHistoryResponse)
@@ -194,8 +226,11 @@ class HealthAssistantAPI:
 
         @app.post("/api/documents/upload", response_model=UploadResponse)
         async def upload_document(file: UploadFile = File(...)):
+            logger.info(f"Received upload request for file: {file.filename}")
+
             # Validate file type
             if not file.filename.lower().endswith('.pdf'):
+                logger.warning(f"Invalid file type uploaded: {file.filename}")
                 raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
             # Create docs directory if it doesn't exist
@@ -205,13 +240,18 @@ class HealthAssistantAPI:
             # Save the file
             file_path = docs_path / file.filename
             try:
+                logger.info(f"Saving file to: {file_path}")
                 with open(file_path, "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
+                logger.info(f"File saved successfully: {file.filename}")
 
                 # Reload vector database with new document
                 self.upload_docs = [f for f in os.listdir("docs") if f.lower().endswith('.pdf')]
+                logger.info(f"Found {len(self.upload_docs)} PDF documents, rebuilding vector database...")
+
                 try:
                     self.vectordb = get_vectorstore(self.upload_docs)
+                    logger.info(f"Document {file.filename} indexed successfully")
                     return UploadResponse(
                         message=f"Document {file.filename} uploaded and indexed successfully",
                         filename=file.filename
@@ -219,28 +259,36 @@ class HealthAssistantAPI:
                 except Exception as embedding_error:
                     # File uploaded but embedding failed
                     error_msg = str(embedding_error)
+                    logger.error(f"Embedding failed for {file.filename}: {error_msg}")
+
                     if "quota" in error_msg.lower() or "429" in error_msg:
+                        logger.warning(f"API quota exceeded during indexing of {file.filename}")
                         return UploadResponse(
                             message=f"Document {file.filename} uploaded but indexing failed due to API quota limits. Please rebuild embeddings later.",
                             filename=file.filename
                         )
                     elif "rate" in error_msg.lower():
+                        logger.warning(f"Rate limit exceeded during indexing of {file.filename}")
                         return UploadResponse(
                             message=f"Document {file.filename} uploaded but indexing failed due to rate limits. Please wait and rebuild embeddings.",
                             filename=file.filename
                         )
                     else:
+                        logger.error(f"Unexpected embedding error for {file.filename}: {error_msg}")
                         return UploadResponse(
                             message=f"Document {file.filename} uploaded but indexing failed: {error_msg}. Please rebuild embeddings manually.",
                             filename=file.filename
                         )
 
             except Exception as e:
+                logger.error(f"Failed to upload file {file.filename}: {str(e)}")
                 # Clean up file if it was created but processing failed
                 if file_path.exists():
                     try:
                         file_path.unlink()
+                        logger.info(f"Cleaned up failed upload file: {file.filename}")
                     except:
+                        logger.warning(f"Failed to clean up file: {file.filename}")
                         pass
                 raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
@@ -281,57 +329,74 @@ class HealthAssistantAPI:
         # Prompt management endpoints
         @app.get("/api/prompts", response_model=PromptConfig)
         async def get_prompts():
+            logger.info("Getting prompt configuration...")
             try:
                 with open("prompts.yaml", "r") as file:
                     prompts = yaml.safe_load(file)
+                logger.info("Prompt configuration loaded successfully")
                 return PromptConfig(**prompts)
             except FileNotFoundError:
+                logger.error("Prompts configuration file not found")
                 raise HTTPException(status_code=404, detail="Prompts configuration file not found")
             except Exception as e:
+                logger.error(f"Error reading prompts: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Error reading prompts: {str(e)}")
 
         @app.put("/api/prompts")
         async def update_prompts(request: PromptUpdateRequest):
+            logger.info("Updating prompt configuration...")
             try:
                 prompts_dict = request.prompts.model_dump()
                 with open("prompts.yaml", "w") as file:
                     yaml.dump(prompts_dict, file, default_flow_style=False, allow_unicode=True)
+                logger.info("Prompt configuration updated successfully")
                 return {"message": "Prompts updated successfully"}
             except Exception as e:
+                logger.error(f"Error updating prompts: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Error updating prompts: {str(e)}")
 
         # Embedding management endpoints
         @app.post("/api/embeddings/rebuild")
         async def rebuild_embeddings():
+            logger.info("Starting embeddings rebuild process...")
+
             try:
                 # Get current PDF documents in docs folder
                 all_files = os.listdir("docs")
                 self.upload_docs = [f for f in all_files if f.lower().endswith('.pdf')]
+                logger.info(f"Found {len(self.upload_docs)} PDF documents for rebuilding: {self.upload_docs}")
 
                 if not self.upload_docs:
+                    logger.warning("No PDF documents found in docs folder")
                     raise HTTPException(status_code=400, detail="No PDF documents found in docs folder")
 
                 # Rebuild vector database with retry logic
                 try:
+                    logger.info("Starting vector database rebuild...")
                     self.vectordb = get_vectorstore(self.upload_docs, from_session_state=False)
+                    logger.info(f"Embeddings rebuilt successfully for {len(self.upload_docs)} documents")
                     return {
                         "message": f"Embeddings rebuilt successfully for {len(self.upload_docs)} documents",
                         "documents_processed": self.upload_docs
                     }
                 except Exception as embedding_error:
                     error_msg = str(embedding_error)
+                    logger.error(f"Embedding rebuild failed: {error_msg}")
 
                     if "quota" in error_msg.lower() or "429" in error_msg:
+                        logger.warning("API quota exceeded during rebuild")
                         raise HTTPException(
                             status_code=429,
                             detail="API quota exceeded. Please check your Google API billing and quota limits, then try again later."
                         )
                     elif "rate" in error_msg.lower():
+                        logger.warning("Rate limit exceeded during rebuild")
                         raise HTTPException(
                             status_code=429,
                             detail="Rate limit exceeded. Please wait a few minutes and try again."
                         )
                     else:
+                        logger.error(f"Unexpected error during rebuild: {error_msg}")
                         raise HTTPException(
                             status_code=500,
                             detail=f"Failed to create embeddings: {error_msg}"
@@ -341,6 +406,7 @@ class HealthAssistantAPI:
                 # Re-raise HTTP exceptions as-is
                 raise
             except Exception as e:
+                logger.error(f"General error during embeddings rebuild: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Error rebuilding embeddings: {str(e)}")
 
         # add health check endpoint

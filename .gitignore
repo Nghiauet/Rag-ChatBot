@@ -171,3 +171,7 @@ cython_debug/
 #.idea/
 docs/
 Vector_DB - Documents/
+
+# Application logs
+*.log
+app.log
