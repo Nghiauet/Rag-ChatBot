@@ -13,6 +13,7 @@ from uuid import uuid4
 import time
 from datetime import datetime
 from dotenv import load_dotenv
+import yaml
 
 # Define request and response models
 class QueryRequest(BaseModel):
@@ -39,6 +40,15 @@ class DocumentListResponse(BaseModel):
 class UploadResponse(BaseModel):
     message: str
     filename: str
+
+class PromptConfig(BaseModel):
+    system_prompt: str
+    user_greeting: str
+    context_instruction: str
+    fallback_response: str
+
+class PromptUpdateRequest(BaseModel):
+    prompts: PromptConfig
 
 class HealthAssistantAPI:
     """
@@ -243,11 +253,33 @@ class HealthAssistantAPI:
                 media_type='application/pdf'
             )
 
+        # Prompt management endpoints
+        @app.get("/api/prompts", response_model=PromptConfig)
+        async def get_prompts():
+            try:
+                with open("prompts.yaml", "r") as file:
+                    prompts = yaml.safe_load(file)
+                return PromptConfig(**prompts)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="Prompts configuration file not found")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error reading prompts: {str(e)}")
+
+        @app.put("/api/prompts")
+        async def update_prompts(request: PromptUpdateRequest):
+            try:
+                prompts_dict = request.prompts.model_dump()
+                with open("prompts.yaml", "w") as file:
+                    yaml.dump(prompts_dict, file, default_flow_style=False, allow_unicode=True)
+                return {"message": "Prompts updated successfully"}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error updating prompts: {str(e)}")
+
         # add health check endpoint
         @app.get("/health")
         async def health_check():
             return {"status": "healthy"}
-    
+
         return app
 
     def _cleanup_expired_sessions(self):
