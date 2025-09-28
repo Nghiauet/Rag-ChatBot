@@ -1,18 +1,24 @@
-version: '3.8'
-
 services:
   women-health-assistant:
-    build: .
+    # build: .
+    image: medical-chatbot-api:0.0.3
     ports:
       - "8300:8300"
     environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_API_KEY=AIzaSyD0HS_36V5C-xsniZwdkH-l16f6CjKs2Do
     volumes:
       - ./docs:/app/docs
       - ./Vector_DB - Documents:/app/Vector_DB - Documents
     restart: unless-stopped
+    networks:
+      - my_shared_network
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8300/docs"]
     #   interval: 30s
     #   timeout: 10s
     #   retries: 3
+
+networks:
+  my_shared_network:
+    external: true
+    name: my_shared_network

@@ -1,12 +1,18 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
+import shutil
+from pathlib import Path
 from utils.prepare_vectordb import get_vectorstore
 from utils.chatbot import get_answer_with_history, get_chat_history, clear_chat_history
 import uvicorn
 from typing import List, Dict, Optional
 from uuid import uuid4
 import time
+from datetime import datetime
+from dotenv import load_dotenv
 
 # Define request and response models
 class QueryRequest(BaseModel):
@@ -21,6 +27,18 @@ class QueryResponse(BaseModel):
 class ChatHistoryResponse(BaseModel):
     session_id: str
     history: List[Dict[str, str]]
+
+class DocumentInfo(BaseModel):
+    filename: str
+    size: int
+    upload_date: str
+
+class DocumentListResponse(BaseModel):
+    documents: List[DocumentInfo]
+
+class UploadResponse(BaseModel):
+    message: str
+    filename: str
 
 class HealthAssistantAPI:
     """
@@ -68,6 +86,15 @@ class HealthAssistantAPI:
             title="Women's Health Assistant API",
             description="API for querying women's health information with session management",
             version="1.0.0"
+        )
+
+        # Add CORS middleware
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # Next.js default port
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
         
         @app.get("/")
@@ -137,6 +164,85 @@ class HealthAssistantAPI:
             clear_chat_history(session_id)
             return {"message": f"Chat history for session {session_id} has been cleared"}
         
+        # Document management endpoints
+        @app.get("/api/documents", response_model=DocumentListResponse)
+        async def list_documents():
+            docs_path = Path("docs")
+            documents = []
+
+            if docs_path.exists():
+                for file_path in docs_path.iterdir():
+                    if file_path.is_file() and file_path.suffix.lower() == '.pdf':
+                        stat = file_path.stat()
+                        documents.append(DocumentInfo(
+                            filename=file_path.name,
+                            size=stat.st_size,
+                            upload_date=datetime.fromtimestamp(stat.st_mtime).isoformat()
+                        ))
+
+            return DocumentListResponse(documents=documents)
+
+        @app.post("/api/documents/upload", response_model=UploadResponse)
+        async def upload_document(file: UploadFile = File(...)):
+            # Validate file type
+            if not file.filename.lower().endswith('.pdf'):
+                raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+            # Create docs directory if it doesn't exist
+            docs_path = Path("docs")
+            docs_path.mkdir(exist_ok=True)
+
+            # Save the file
+            file_path = docs_path / file.filename
+            try:
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+
+                # Reload vector database with new document
+                self.upload_docs = os.listdir("docs")
+                self.vectordb = get_vectorstore(self.upload_docs)
+
+                return UploadResponse(
+                    message=f"Document {file.filename} uploaded successfully",
+                    filename=file.filename
+                )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+
+        @app.delete("/api/documents/{filename}")
+        async def delete_document(filename: str):
+            file_path = Path("docs") / filename
+
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            try:
+                file_path.unlink()
+
+                # Reload vector database without deleted document
+                self.upload_docs = os.listdir("docs")
+                if self.upload_docs:
+                    self.vectordb = get_vectorstore(self.upload_docs)
+                else:
+                    self.vectordb = None
+
+                return {"message": f"Document {filename} deleted successfully"}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+        @app.get("/api/documents/{filename}/download")
+        async def download_document(filename: str):
+            file_path = Path("docs") / filename
+
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            return FileResponse(
+                path=str(file_path),
+                filename=filename,
+                media_type='application/pdf'
+            )
+
         # add health check endpoint
         @app.get("/health")
         async def health_check():
@@ -168,5 +274,6 @@ def run_api():
     return app
 
 if __name__ == "__main__":
+    # set env for GOOGLE_API_KEY
     app = run_api()
-    uvicorn.run(app, host="0.0.0.0", port=8300)
+    uvicorn.run(app, host="0.0.0.0", port=8301)
