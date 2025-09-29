@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { promptAPI, PromptConfig } from '../lib/api';
 import toast from 'react-hot-toast';
-import { MessageSquare, User, FileSearch, MessageCircle, Save, Loader2, Lightbulb } from 'lucide-react';
+import { MessageSquare, User, FileSearch, MessageCircle, Save, Loader2, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react';
+
+type PromptField = keyof PromptConfig;
 
 export default function PromptManager() {
   const [prompts, setPrompts] = useState<PromptConfig>({
@@ -14,6 +16,7 @@ export default function PromptManager() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Set<PromptField>>(new Set(['system_prompt']));
 
   useEffect(() => {
     loadPrompts();
@@ -51,6 +54,28 @@ export default function PromptManager() {
     }));
   };
 
+  const toggleSection = (field: PromptField) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(field)) {
+        newSet.delete(field);
+      } else {
+        newSet.add(field);
+      }
+      return newSet;
+    });
+  };
+
+  const getPreviewText = (text: string, maxLength: number = 100) => {
+    if (!text) return 'No content yet...';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  const getCharCount = (text: string) => {
+    return text.length;
+  };
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -68,6 +93,45 @@ export default function PromptManager() {
       </div>
     );
   }
+
+  const promptSections = [
+    {
+      field: 'system_prompt' as PromptField,
+      title: 'System Prompt',
+      description: 'Defines the AI assistant\'s role and behavior',
+      icon: MessageCircle,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-600',
+      rows: 8
+    },
+    {
+      field: 'user_greeting' as PromptField,
+      title: 'User Greeting',
+      description: 'Message shown when users start a conversation',
+      icon: User,
+      iconBg: 'bg-green-50',
+      iconColor: 'text-green-600',
+      rows: 4
+    },
+    {
+      field: 'context_instruction' as PromptField,
+      title: 'Context Instruction',
+      description: 'Instructions for using context from documents',
+      icon: FileSearch,
+      iconBg: 'bg-amber-50',
+      iconColor: 'text-amber-600',
+      rows: 4
+    },
+    {
+      field: 'fallback_response' as PromptField,
+      title: 'Fallback Response',
+      description: 'Response when AI cannot answer based on context',
+      icon: MessageSquare,
+      iconBg: 'bg-red-50',
+      iconColor: 'text-red-600',
+      rows: 4
+    }
+  ];
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -101,95 +165,74 @@ export default function PromptManager() {
         </button>
       </div>
 
-      {/* Form Cards */}
-      <div className="space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex items-center justify-center w-9 h-9 bg-blue-50 rounded-xl flex-shrink-0 mt-0.5">
-              <MessageCircle className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="system_prompt" className="block text-base font-medium text-gray-900 mb-1">
-                System Prompt
-              </label>
-              <p className="text-sm text-gray-500 mb-3">Defines the AI assistant's role and behavior</p>
-              <textarea
-                id="system_prompt"
-                value={prompts.system_prompt}
-                onChange={(e) => handleInputChange('system_prompt', e.target.value)}
-                rows={8}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm"
-                placeholder="Enter the system prompt..."
-              />
-            </div>
-          </div>
-        </div>
+      {/* Accordion Sections */}
+      <div className="space-y-3">
+        {promptSections.map((section) => {
+          const isExpanded = expandedSections.has(section.field);
+          const Icon = section.icon;
+          const content = prompts[section.field];
+          const charCount = getCharCount(content);
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex items-center justify-center w-9 h-9 bg-green-50 rounded-xl flex-shrink-0 mt-0.5">
-              <User className="w-5 h-5 text-green-600" />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="user_greeting" className="block text-base font-medium text-gray-900 mb-1">
-                User Greeting
-              </label>
-              <p className="text-sm text-gray-500 mb-3">Message shown when users start a conversation</p>
-              <textarea
-                id="user_greeting"
-                value={prompts.user_greeting}
-                onChange={(e) => handleInputChange('user_greeting', e.target.value)}
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm"
-                placeholder="Enter the greeting message..."
-              />
-            </div>
-          </div>
-        </div>
+          return (
+            <div
+              key={section.field}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200"
+            >
+              {/* Header - Always Visible */}
+              <button
+                onClick={() => toggleSection(section.field)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 ${section.iconBg}`}>
+                    <Icon className={`w-5 h-5 ${section.iconColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-base font-medium text-gray-900">
+                        {section.title}
+                      </h3>
+                      <span className="text-xs text-gray-500 font-medium">
+                        {charCount} characters
+                      </span>
+                    </div>
+                    {!isExpanded && (
+                      <p className="text-sm text-gray-500 truncate">
+                        {getPreviewText(content)}
+                      </p>
+                    )}
+                    {isExpanded && (
+                      <p className="text-sm text-gray-500">
+                        {section.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 ml-4">
+                  {isExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  )}
+                </div>
+              </button>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex items-center justify-center w-9 h-9 bg-amber-50 rounded-xl flex-shrink-0 mt-0.5">
-              <FileSearch className="w-5 h-5 text-amber-600" />
+              {/* Expanded Content */}
+              {isExpanded && (
+                <div className="px-6 pb-6 pt-2 border-t border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                  <textarea
+                    id={section.field}
+                    value={content}
+                    onChange={(e) => handleInputChange(section.field, e.target.value)}
+                    rows={section.rows}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm leading-relaxed"
+                    placeholder={`Enter ${section.title.toLowerCase()}...`}
+                  />
+                </div>
+              )}
             </div>
-            <div className="flex-1">
-              <label htmlFor="context_instruction" className="block text-base font-medium text-gray-900 mb-1">
-                Context Instruction
-              </label>
-              <p className="text-sm text-gray-500 mb-3">Instructions for using context from documents</p>
-              <textarea
-                id="context_instruction"
-                value={prompts.context_instruction}
-                onChange={(e) => handleInputChange('context_instruction', e.target.value)}
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm"
-                placeholder="Enter context instructions..."
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex items-center justify-center w-9 h-9 bg-red-50 rounded-xl flex-shrink-0 mt-0.5">
-              <MessageSquare className="w-5 h-5 text-red-600" />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="fallback_response" className="block text-base font-medium text-gray-900 mb-1">
-                Fallback Response
-              </label>
-              <p className="text-sm text-gray-500 mb-3">Response when AI cannot answer based on context</p>
-              <textarea
-                id="fallback_response"
-                value={prompts.fallback_response}
-                onChange={(e) => handleInputChange('fallback_response', e.target.value)}
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm"
-                placeholder="Enter fallback response..."
-              />
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
       {/* Tips Card */}
