@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Any
 import os
 import logging
 import yaml
+from app.config import PROMPTS_FILE
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -22,12 +23,12 @@ def load_prompts_config():
         dict: Dictionary containing prompt configuration
     """
     try:
-        with open("prompts.yaml", "r", encoding="utf-8") as file:
+        with open(PROMPTS_FILE, "r", encoding="utf-8") as file:
             prompts = yaml.safe_load(file)
-            logger.debug("Prompts configuration loaded successfully from prompts.yaml")
+            logger.debug(f"Prompts configuration loaded successfully from {PROMPTS_FILE}")
             return prompts
     except FileNotFoundError:
-        logger.warning("prompts.yaml not found, using fallback configuration")
+        logger.warning(f"{PROMPTS_FILE} not found, using fallback configuration")
         # Fallback configuration if prompts.yaml doesn't exist
         return {
             "system_prompt": "You are a helpful women's health assistant.",
@@ -75,7 +76,7 @@ def get_context_retriever_chain(vectordb):
     # Build system prompt using the configured prompts
     system_prompt_template = f"{prompts_config['system_prompt']}\n\n{prompts_config['context_instruction']}\n\nContext from documents:\n####\n{{context}}"
     # logger.info(f"PROMPT TEMPLATE: {system_prompt_template}")
-    logger.info(f"Using dynamic system prompt from prompts.yaml")
+    logger.info(f"Using dynamic system prompt from {PROMPTS_FILE}")
     logger.debug(f"System prompt template: {system_prompt_template[:100]}...")
 
     llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0.2)

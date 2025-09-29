@@ -14,8 +14,8 @@ logging.basicConfig(
 
 # Configuration constants
 SESSION_TIMEOUT = 30 * 60  # 30 minutes in seconds
-DOCS_FOLDER = "docs"
-PROMPTS_FILE = "prompts.yaml"
+DOCS_FOLDER = "data/docs"
+PROMPTS_FILE = "data/prompts.yaml"
 
 # Fix for protobuf compatibility issue
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 import time
 import logging
+from app.config import DOCS_FOLDER
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def extract_pdf_text(pdfs):
     logger.info(f"Starting PDF text extraction for {len(pdfs)} documents")
     docs = []
     for pdf in pdfs:
-        pdf_path = os.path.join("docs", pdf)
+        pdf_path = os.path.join(DOCS_FOLDER, pdf)
         logger.debug(f"Extracting text from: {pdf}")
         try:
             # Load text from the PDF and extend the list of documents
@@ -76,17 +77,19 @@ def get_vectorstore(pdfs, max_retries=3, retry_delay=5):
     logger.info(f"Creating vectorstore for {len(pdfs)} PDFs (from_session_state={from_session_state})")
     embedding = GoogleGenerativeAIEmbeddings(model=os.getenv("EMBEDDING_MODEL"))
 
-    if from_session_state and os.path.exists("Vector_DB - Documents"):
+    vector_db_path = "data/vector_db"
+
+    if from_session_state and os.path.exists(vector_db_path):
         logger.info("Existing vector database found, attempting to load...")
         try:
-            vectordb = Chroma(persist_directory="Vector_DB - Documents", embedding_function=embedding)
+            vectordb = Chroma(persist_directory=vector_db_path, embedding_function=embedding)
             logger.info("Successfully loaded existing vector database")
             return vectordb
         except Exception as e:
             logger.warning(f"Failed to load existing vector database: {e}")
             logger.info("Will attempt to create new vector database")
 
-    if not from_session_state or not os.path.exists("Vector_DB - Documents"):
+    if not from_session_state or not os.path.exists(vector_db_path):
         logger.info("Creating new vector database from documents...")
         docs = extract_pdf_text(pdfs)
         chunks = get_text_chunks(docs)
@@ -99,7 +102,7 @@ def get_vectorstore(pdfs, max_retries=3, retry_delay=5):
                 vectordb = Chroma.from_documents(
                     documents=chunks,
                     embedding=embedding,
-                    persist_directory="Vector_DB - Documents"
+                    persist_directory=vector_db_path
                 )
                 logger.info(f"Successfully created vector database on attempt {attempt + 1}")
                 return vectordb
