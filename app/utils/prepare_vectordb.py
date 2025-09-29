@@ -55,13 +55,12 @@ def get_text_chunks(docs):
     logger.info(f"Text chunking completed. Created {len(chunks)} chunks from {len(docs)} documents")
     return chunks
 
-def get_vectorstore(pdfs, from_session_state=True, max_retries=3, retry_delay=5):
+def get_vectorstore(pdfs, max_retries=3, retry_delay=5):
     """
     Create or retrieve a vectorstore from PDF documents with error handling
 
     Parameters:
     - pdfs (list): List of PDF documents
-    - from_session_state (bool, optional): Flag indicating whether to load from session state. Defaults to False
     - max_retries (int): Maximum number of retries for embedding failures. Defaults to 3
     - retry_delay (int): Delay in seconds between retries. Defaults to 5
 
@@ -71,21 +70,21 @@ def get_vectorstore(pdfs, from_session_state=True, max_retries=3, retry_delay=5)
     Raises:
     - Exception: If embedding creation fails after all retries
     """
-    logger.info(f"Creating vectorstore for {len(pdfs)} PDFs (from_session_state={from_session_state})")
+    # - from_session_state (bool, optional): Flag indicating whether to load from session state. Defaults to False
     load_dotenv()
-    embedding = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+    from_session_state = os.getenv("FROM_SESSION_STATE").lower() == "true"
+    logger.info(f"Creating vectorstore for {len(pdfs)} PDFs (from_session_state={from_session_state})")
+    embedding = GoogleGenerativeAIEmbeddings(model=os.getenv("EMBEDDING_MODEL"))
 
     if from_session_state and os.path.exists("Vector_DB - Documents"):
         logger.info("Existing vector database found, attempting to load...")
         try:
-            # Retrieve vectorstore from existing one
             vectordb = Chroma(persist_directory="Vector_DB - Documents", embedding_function=embedding)
             logger.info("Successfully loaded existing vector database")
             return vectordb
         except Exception as e:
             logger.warning(f"Failed to load existing vector database: {e}")
             logger.info("Will attempt to create new vector database")
-            # Fall through to create new database
 
     if not from_session_state or not os.path.exists("Vector_DB - Documents"):
         logger.info("Creating new vector database from documents...")
@@ -93,11 +92,10 @@ def get_vectorstore(pdfs, from_session_state=True, max_retries=3, retry_delay=5)
         chunks = get_text_chunks(docs)
 
         logger.info(f"Starting embedding creation with {len(chunks)} chunks (max_retries={max_retries})")
-        # Retry logic for embedding creation
+        
         for attempt in range(max_retries):
             try:
                 logger.info(f"Embedding attempt {attempt + 1}/{max_retries}")
-                # Create vectorstore from chunks and saves it to the folder Vector_DB - Documents
                 vectordb = Chroma.from_documents(
                     documents=chunks,
                     embedding=embedding,
@@ -106,61 +104,29 @@ def get_vectorstore(pdfs, from_session_state=True, max_retries=3, retry_delay=5)
                 logger.info(f"Successfully created vector database on attempt {attempt + 1}")
                 return vectordb
 
-            except GoogleGenerativeAIError as e:
-                error_msg = str(e).lower()
-                logger.error(f"Google API error on attempt {attempt + 1}: {str(e)}")
-
-                if "quota" in error_msg or "429" in error_msg:
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
-                        logger.warning(f"API quota exceeded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time} seconds...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        logger.error(f"API quota exceeded after {max_retries} attempts")
-                        raise Exception(f"API quota exceeded after {max_retries} attempts. Please check your Google API billing and quota limits.")
-
-                elif "rate" in error_msg:
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (attempt + 1)
-                        logger.warning(f"Rate limit hit (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time} seconds...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        logger.error(f"Rate limit exceeded after {max_retries} attempts")
-                        raise Exception(f"Rate limit exceeded after {max_retries} attempts. Please wait and try again later.")
-
-                else:
-                    # Other Google API errors
-                    logger.error(f"Unhandled Google API error: {str(e)}")
-                    raise Exception(f"Google API error: {e}")
-
             except Exception as e:
-                logger.error(f"General error on attempt {attempt + 1}: {str(e)}")
                 if attempt < max_retries - 1:
-                    wait_time = retry_delay
-                    logger.warning(f"Embedding creation failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time} seconds...")
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Embedding attempt {attempt + 1} failed: {str(e)}. Retrying in {wait_time} seconds...")
                     time.sleep(wait_time)
-                    continue
                 else:
-                    logger.error(f"Failed to create embeddings after {max_retries} attempts")
+                    logger.error(f"Failed to create embeddings after {max_retries} attempts: {str(e)}")
                     raise Exception(f"Failed to create embeddings after {max_retries} attempts: {e}")
 
-    logger.warning("Returning None - should not reach here normally")
     return None
 
-if __name__ == "__main__":
-    # Ensure the docs folder exists
-    if not os.path.exists("docs"):
-        os.makedirs("docs")
-        print("Created 'docs' directory. Please add PDF documents to this folder.")
-    else:
-        # Get list of PDF files in the docs folder
-        pdf_files = [f for f in os.listdir("docs") if f.lower().endswith('.pdf')]
+# if __name__ == "__main__":
+#     # Ensure the docs folder exists
+#     if not os.path.exists("docs"):
+#         os.makedirs("docs")
+#         print("Created 'docs' directory. Please add PDF documents to this folder.")
+#     else:
+#         # Get list of PDF files in the docs folder
+#         pdf_files = [f for f in os.listdir("docs") if f.lower().endswith('.pdf')]
         
-        if not pdf_files:
-            print("No PDF documents found in the 'docs' folder. Please add documents before running.")
-        else:
-            print(f"Found {len(pdf_files)} PDF documents. Preparing vector database...")
-            vectordb = get_vectorstore(pdf_files)
-            print("Vector database preparation complete.")
+#         if not pdf_files:
+#             print("No PDF documents found in the 'docs' folder. Please add documents before running.")
+#         else:
+#             print(f"Found {len(pdf_files)} PDF documents. Preparing vector database...")
+#             vectordb = get_vectorstore(pdf_files)
+#             print("Vector database preparation complete.")

@@ -175,3 +175,4 @@ Vector_DB - Documents/
 # Application logs
 *.log
 app.log
+archived/

@@ -74,9 +74,9 @@ def get_context_retriever_chain(vectordb):
 
     # Build system prompt using the configured prompts
     system_prompt_template = f"{prompts_config['system_prompt']}\n\n{prompts_config['context_instruction']}\n\nContext from documents:\n####\n{{context}}"
-    logger.info(f"PROMPT TEMPLATE: {system_prompt_template}")
+    # logger.info(f"PROMPT TEMPLATE: {system_prompt_template}")
     logger.info(f"Using dynamic system prompt from prompts.yaml")
-    logger.debug(f"System prompt template: {system_prompt_template[:200]}...")
+    logger.debug(f"System prompt template: {system_prompt_template[:100]}...")
 
     llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0.2)
     retriever = vectordb.as_retriever()
@@ -203,82 +203,3 @@ def clear_chat_history(session_id: str) -> None:
     else:
         logger.warning(f"Attempted to clear non-existent session history: {session_id}")
 
-def get_answer_from_query(question, vectordb):
-    """
-    Generate a response to the user's question based on the vector database
-    without requiring chat history or Streamlit components.
-
-    Parameters:
-    - question (str): The user's question
-    - vectordb: Vector database used for context retrieval
-
-    Returns:
-    - str: The generated answer
-    """
-    logger.info(f"Processing standalone query: {question[:100]}...")
-
-    # Create an empty chat history for this single query
-    chat_history = []
-
-    try:
-        # Use the existing get_response function
-        response, context = get_response(question, chat_history, vectordb)
-        logger.info(f"Successfully processed standalone query. Context documents: {len(context)}")
-        return response
-    except Exception as e:
-        logger.error(f"Error processing standalone query: {str(e)}")
-        raise
-
-if __name__ == "__main__":
-    """
-    Test the chatbot functionality directly from the command line
-    """
-    import os
-    from prepare_vectordb import get_vectorstore
-    
-    # Fix for protobuf compatibility issue
-    import os
-    os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-    
-    # Ensure the docs folder exists
-    if not os.path.exists("docs"):
-        os.makedirs("docs")
-        print("Created 'docs' folder. Please add documents and run again.")
-        exit(1)
-        
-    # Load documents from the docs folder
-    upload_docs = os.listdir("docs")
-    if not upload_docs:
-        print("No documents found in the 'docs' folder. Please add documents before testing.")
-        exit(1)
-    
-    print("Loading vector database...")
-    vectordb = get_vectorstore(upload_docs)
-    print("Vector database loaded successfully!")
-    
-    print("\n=== Women's Health Assistant Test Mode ===")
-    print("Type 'exit' or 'quit' to end the session\n")
-    
-    # Create a test session ID
-    test_session_id = "test_session"
-    
-    while True:
-        question = input("Your question: ")
-        if question.lower() in ["exit", "quit"]:
-            break
-            
-        print("\nProcessing your question...\n")
-        try:
-            answer, sources, _ = get_answer_with_history(test_session_id, question, vectordb)
-            print(f"Answer: {answer}\n")
-            
-            # Display sources
-            if sources:
-                print("Sources:")
-                for source, pages in sources.items():
-                    print(f"  {source}: Pages {', '.join(map(str, pages))}")
-                print()
-        except Exception as e:
-            print(f"Error: {str(e)}\n")
-    
-    print("Test session ended.")
