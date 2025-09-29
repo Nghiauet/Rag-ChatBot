@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { documentAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { Upload, FileText, Loader2 } from 'lucide-react';
 
 interface DocumentUploadProps {
   onUploadSuccess: () => void;
@@ -47,39 +48,62 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
   });
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-3xl mx-auto">
       <div
         {...getRootProps()}
         className={`
-          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-          ${isDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          relative bg-white border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-200
+          ${isDragActive
+            ? 'border-blue-500 bg-blue-50/50 shadow-lg shadow-blue-100'
+            : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
+          }
           ${uploading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
         <input {...getInputProps()} />
 
-        <div className="space-y-4">
-          <div className="text-6xl">📄</div>
-
+        <div className="space-y-5">
           {uploading ? (
-            <div className="space-y-2">
-              <div className="text-lg font-medium text-gray-700">Uploading...</div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full animate-pulse w-1/2"></div>
+            <>
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
               </div>
-            </div>
+              <div className="space-y-3">
+                <p className="text-lg font-medium text-gray-900">Uploading document...</p>
+                <div className="max-w-xs mx-auto">
+                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : isDragActive ? (
+            <>
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl">
+                <FileText className="w-8 h-8 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-lg font-medium text-gray-900">Drop your file here</p>
+              </div>
+            </>
           ) : (
-            <div className="space-y-2">
-              <div className="text-lg font-medium text-gray-700">
-                {isDragActive ? 'Drop the PDF file here...' : 'Drag & drop a PDF file here'}
+            <>
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl">
+                <Upload className="w-8 h-8 text-gray-600" />
               </div>
-              <div className="text-sm text-gray-500">
-                or click to select a file
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-gray-900">
+                  Drop your PDF file here
+                </p>
+                <p className="text-sm text-gray-500">
+                  or click to browse
+                </p>
               </div>
-              <div className="text-xs text-gray-400">
-                Only PDF files are supported
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full">
+                <FileText className="w-4 h-4 text-gray-400" />
+                <span className="text-xs text-gray-500 font-medium">PDF files only</span>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
