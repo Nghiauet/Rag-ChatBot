@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { documentAPI, DocumentInfo, embeddingAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileText, Download, Trash2, RefreshCw, Loader2, FolderOpen } from 'lucide-react';
+import ConfirmDialog from './ConfirmDialog';
 
 interface DocumentListProps {
   refreshTrigger: number;
@@ -14,6 +15,11 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; filename: string | null }>({
+    isOpen: false,
+    filename: null
+  });
+  const [rebuildDialog, setRebuildDialog] = useState(false);
 
   const fetchDocuments = async () => {
     try {
@@ -32,21 +38,24 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     fetchDocuments();
   }, [refreshTrigger]);
 
-  const handleDelete = async (filename: string) => {
-    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
-      return;
-    }
+  const handleDelete = (filename: string) => {
+    setDeleteDialog({ isOpen: true, filename });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.filename) return;
 
     try {
-      setDeleting(filename);
-      await documentAPI.deleteDocument(filename);
-      toast.success(`Document "${filename}" deleted successfully`);
+      setDeleting(deleteDialog.filename);
+      await documentAPI.deleteDocument(deleteDialog.filename);
+      toast.success(`Document "${deleteDialog.filename}" deleted successfully`);
       await fetchDocuments(); // Refresh the list
     } catch (error: any) {
       console.error('Delete error:', error);
       toast.error(error.response?.data?.detail || 'Failed to delete document');
     } finally {
       setDeleting(null);
+      setDeleteDialog({ isOpen: false, filename: null });
     }
   };
 
@@ -78,11 +87,11 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     });
   };
 
-  const handleRebuildEmbeddings = async () => {
-    if (!confirm('Are you sure you want to rebuild embeddings? This may take a few minutes depending on the number of documents.')) {
-      return;
-    }
+  const handleRebuildEmbeddings = () => {
+    setRebuildDialog(true);
+  };
 
+  const confirmRebuildEmbeddings = async () => {
     try {
       setRebuildingEmbeddings(true);
       const result = await embeddingAPI.rebuildEmbeddings();
@@ -94,6 +103,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       toast.error(error.response?.data?.detail || 'Failed to rebuild embeddings');
     } finally {
       setRebuildingEmbeddings(false);
+      setRebuildDialog(false);
     }
   };
 
@@ -209,6 +219,30 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
           ))}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, filename: null })}
+        onConfirm={confirmDelete}
+        title="Delete Document"
+        message={`Are you sure you want to delete "${deleteDialog.filename}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Rebuild Embeddings Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={rebuildDialog}
+        onClose={() => setRebuildDialog(false)}
+        onConfirm={confirmRebuildEmbeddings}
+        title="Rebuild Embeddings"
+        message="This will rebuild embeddings for all documents. The process may take a few minutes depending on the number of documents."
+        confirmText="Rebuild"
+        cancelText="Cancel"
+        variant="warning"
+      />
     </div>
   );
 }
