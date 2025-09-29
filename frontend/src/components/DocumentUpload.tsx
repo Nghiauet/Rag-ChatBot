@@ -27,8 +27,22 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
     setUploading(true);
 
     try {
-      await documentAPI.uploadDocument(file);
-      toast.success(`Document "${file.name}" uploaded successfully!`);
+      const response = await documentAPI.uploadDocument(file);
+      toast.success(response.message, { duration: 5000 });
+
+      // Show additional warning about rebuilding embeddings
+      setTimeout(() => {
+        toast('Remember to rebuild embeddings to update the knowledge base', {
+          duration: 6000,
+          icon: '⚠️',
+          style: {
+            background: '#FEF3C7',
+            color: '#92400E',
+            border: '1px solid #FCD34D',
+          },
+        });
+      }, 500);
+
       onUploadSuccess();
     } catch (error: any) {
       console.error('Upload error:', error);

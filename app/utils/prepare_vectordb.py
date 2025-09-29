@@ -56,30 +56,30 @@ def get_text_chunks(docs):
     logger.info(f"Text chunking completed. Created {len(chunks)} chunks from {len(docs)} documents")
     return chunks
 
-def get_vectorstore(pdfs, max_retries=3, retry_delay=5):
+def get_vectorstore(pdfs, rebuild=False, max_retries=3, retry_delay=5):
     """
     Create or retrieve a vectorstore from PDF documents with error handling
 
     Parameters:
     - pdfs (list): List of PDF documents
+    - rebuild (bool): If True, force rebuild the vector database. If False, load existing if available. Defaults to False
     - max_retries (int): Maximum number of retries for embedding failures. Defaults to 3
     - retry_delay (int): Delay in seconds between retries. Defaults to 5
 
     Returns:
-    - vectordb or None: The created or retrieved vectorstore. Returns None if loading from session state and the database does not exist
+    - vectordb: The created or retrieved vectorstore
 
     Raises:
     - Exception: If embedding creation fails after all retries
     """
-    # - from_session_state (bool, optional): Flag indicating whether to load from session state. Defaults to False
     load_dotenv()
-    from_session_state = os.getenv("FROM_SESSION_STATE").lower() == "true"
-    logger.info(f"Creating vectorstore for {len(pdfs)} PDFs (from_session_state={from_session_state})")
+    logger.info(f"Creating vectorstore for {len(pdfs)} PDFs (rebuild={rebuild})")
     embedding = GoogleGenerativeAIEmbeddings(model=os.getenv("EMBEDDING_MODEL"))
 
     vector_db_path = "data/vector_db"
 
-    if from_session_state and os.path.exists(vector_db_path):
+    # Try to load existing database if not rebuilding
+    if not rebuild and os.path.exists(vector_db_path):
         logger.info("Existing vector database found, attempting to load...")
         try:
             vectordb = Chroma(persist_directory=vector_db_path, embedding_function=embedding)
@@ -89,34 +89,32 @@ def get_vectorstore(pdfs, max_retries=3, retry_delay=5):
             logger.warning(f"Failed to load existing vector database: {e}")
             logger.info("Will attempt to create new vector database")
 
-    if not from_session_state or not os.path.exists(vector_db_path):
-        logger.info("Creating new vector database from documents...")
-        docs = extract_pdf_text(pdfs)
-        chunks = get_text_chunks(docs)
+    # Create new vector database
+    logger.info("Creating new vector database from documents...")
+    docs = extract_pdf_text(pdfs)
+    chunks = get_text_chunks(docs)
 
-        logger.info(f"Starting embedding creation with {len(chunks)} chunks (max_retries={max_retries})")
-        
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"Embedding attempt {attempt + 1}/{max_retries}")
-                vectordb = Chroma.from_documents(
-                    documents=chunks,
-                    embedding=embedding,
-                    persist_directory=vector_db_path
-                )
-                logger.info(f"Successfully created vector database on attempt {attempt + 1}")
-                return vectordb
+    logger.info(f"Starting embedding creation with {len(chunks)} chunks (max_retries={max_retries})")
 
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
-                    logger.warning(f"Embedding attempt {attempt + 1} failed: {str(e)}. Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"Failed to create embeddings after {max_retries} attempts: {str(e)}")
-                    raise Exception(f"Failed to create embeddings after {max_retries} attempts: {e}")
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Embedding attempt {attempt + 1}/{max_retries}")
+            vectordb = Chroma.from_documents(
+                documents=chunks,
+                embedding=embedding,
+                persist_directory=vector_db_path
+            )
+            logger.info(f"Successfully created vector database on attempt {attempt + 1}")
+            return vectordb
 
-    return None
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                logger.warning(f"Embedding attempt {attempt + 1} failed: {str(e)}. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Failed to create embeddings after {max_retries} attempts: {str(e)}")
+                raise Exception(f"Failed to create embeddings after {max_retries} attempts: {e}")
 
 # if __name__ == "__main__":
 #     # Ensure the docs folder exists

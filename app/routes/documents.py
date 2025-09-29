@@ -56,40 +56,14 @@ def create_document_routes(app_instance):
                 shutil.copyfileobj(file.file, buffer)
             logger.info(f"File saved successfully: {file.filename}")
 
-            # Reload vector database with new document
+            # Update document list (don't rebuild vector database yet)
             app_instance.upload_docs = [f for f in os.listdir(DOCS_FOLDER) if f.lower().endswith('.pdf')]
-            logger.info(f"Found {len(app_instance.upload_docs)} PDF documents, rebuilding vector database...")
+            logger.info(f"Document {file.filename} uploaded successfully. Total PDFs: {len(app_instance.upload_docs)}")
 
-            try:
-                app_instance.vectordb = get_vectorstore(app_instance.upload_docs)
-                logger.info(f"Document {file.filename} indexed successfully")
-                return UploadResponse(
-                    message=f"Document {file.filename} uploaded and indexed successfully",
-                    filename=file.filename
-                )
-            except Exception as embedding_error:
-                # File uploaded but embedding failed
-                error_msg = str(embedding_error)
-                logger.error(f"Embedding failed for {file.filename}: {error_msg}")
-
-                if "quota" in error_msg.lower() or "429" in error_msg:
-                    logger.warning(f"API quota exceeded during indexing of {file.filename}")
-                    return UploadResponse(
-                        message=f"Document {file.filename} uploaded but indexing failed due to API quota limits. Please rebuild embeddings later.",
-                        filename=file.filename
-                    )
-                elif "rate" in error_msg.lower():
-                    logger.warning(f"Rate limit exceeded during indexing of {file.filename}")
-                    return UploadResponse(
-                        message=f"Document {file.filename} uploaded but indexing failed due to rate limits. Please wait and rebuild embeddings.",
-                        filename=file.filename
-                    )
-                else:
-                    logger.error(f"Unexpected embedding error for {file.filename}: {error_msg}")
-                    return UploadResponse(
-                        message=f"Document {file.filename} uploaded but indexing failed: {error_msg}. Please rebuild embeddings manually.",
-                        filename=file.filename
-                    )
+            return UploadResponse(
+                message=f"Document {file.filename} uploaded successfully. Please rebuild embeddings to include this document in the knowledge base.",
+                filename=file.filename
+            )
 
         except Exception as e:
             logger.error(f"Failed to upload file {file.filename}: {str(e)}")
@@ -113,14 +87,11 @@ def create_document_routes(app_instance):
         try:
             file_path.unlink()
 
-            # Reload vector database without deleted document
-            app_instance.upload_docs = os.listdir(DOCS_FOLDER)
-            if app_instance.upload_docs:
-                app_instance.vectordb = get_vectorstore(app_instance.upload_docs)
-            else:
-                app_instance.vectordb = None
+            # Update document list (don't rebuild vector database yet)
+            app_instance.upload_docs = [f for f in os.listdir(DOCS_FOLDER) if f.lower().endswith('.pdf')]
+            logger.info(f"Document {filename} deleted. Remaining PDFs: {len(app_instance.upload_docs)}")
 
-            return {"message": f"Document {filename} deleted successfully"}
+            return {"message": f"Document {filename} deleted successfully. Please rebuild embeddings to update the knowledge base."}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
@@ -154,7 +125,7 @@ def create_document_routes(app_instance):
             # Rebuild vector database with retry logic
             try:
                 logger.info("Starting vector database rebuild...")
-                app_instance.vectordb = get_vectorstore(app_instance.upload_docs, from_session_state=False)
+                app_instance.vectordb = get_vectorstore(app_instance.upload_docs, rebuild=True)
                 logger.info(f"Embeddings rebuilt successfully for {len(app_instance.upload_docs)} documents")
                 return {
                     "message": f"Embeddings rebuilt successfully for {len(app_instance.upload_docs)} documents",
