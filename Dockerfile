@@ -4,13 +4,14 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file first to leverage caching
-COPY requirements.txt .
-COPY setup.py .
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install dependencies and the package
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install -e .
+# Copy dependency files first to leverage Docker layer caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv
+RUN uv sync --frozen --no-cache
 
 # Copy the rest of the application
 COPY . .
@@ -18,9 +19,8 @@ COPY . .
 # Create docs directory if it doesn't exist
 RUN mkdir -p /app/docs
 
-
 # Expose the port that FastAPI will run on
 EXPOSE 8300
 
 # Command to run the application
-CMD ["python", "app/app.py"]
+CMD ["uv", "run", "app/app.py"]
