@@ -23,18 +23,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
     setIsLoading(true);
 
-    // Simple authentication - for demo purposes
-    // In production, this should call a backend API
-    if (username === 'admin' && password === 'admin') {
-      toast.success('Login successful!');
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('username', username);
-      onLoginSuccess();
-    } else {
-      toast.error('Invalid username or password');
-    }
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
 
-    setIsLoading(false);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success('Login successful!');
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('username', data.user.username);
+        onLoginSuccess();
+      } else {
+        toast.error(data.error || 'Invalid username or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Failed to login. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -113,11 +126,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-            <p className="text-sm text-gray-500">
-              Demo: <span className="font-medium text-gray-700">admin / admin</span>
-            </p>
-          </div>
         </div>
 
         <p className="text-center text-gray-400 text-sm mt-6">
