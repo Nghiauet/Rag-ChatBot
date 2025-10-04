@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     // Save the file
     const filePath = path.join(DOCS_FOLDER, file.name);
-    console.log(`Saving file to: ${filePath}`);
+    console.log(`Uploading file: ${file.name}`);
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer());

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Read users from config file
-    const usersFilePath = path.join(process.cwd(), '..', 'data', 'users.json');
+    const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
     const usersData = fs.readFileSync(usersFilePath, 'utf-8');
     const config: UsersConfig = JSON.parse(usersData);
 

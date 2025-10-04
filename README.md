@@ -1,178 +1,310 @@
+# Women's Health Assistant - RAG ChatBot
 
-# Women's Health Assistant API
+A specialized chatbot application for women's health information powered by Next.js, LangChain, and Google Gemini AI. This full-stack application combines a modern React frontend with server-side RAG (Retrieval-Augmented Generation) capabilities.
 
-A specialized chatbot API for women's health information with conversation history management.
+## 🌟 Features
 
-## Overview
+- **Intelligent Q&A**: RAG-powered responses grounded in medical documents
+- **Bilingual Support**: Handles both Vietnamese and English questions
+- **Document Management**: Upload, download, and delete PDF documents
+- **Vector Search**: ChromaDB-powered semantic search for relevant context
+- **Session Management**: Conversation history tracking per session
+- **Prompt Configuration**: Customizable system prompts via YAML
+- **Authentication**: Secure login system with SHA-256 password hashing
+- **Real-time Chat**: Interactive chat interface with source citations
 
-This API provides access to a women's health information assistant powered by LangChain and Google's Generative AI. The system can answer questions about various women's health topics including reproductive health, pregnancy, menopause, hormonal disorders, and more.
+## 🏗️ Technology Stack
 
-Key features:
-- Support for both Vietnamese and English questions
-- Conversation history management
-- Document-grounded responses with citation sources
-- Session-based interactions
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **AI/ML**:
+  - LangChain.js for RAG orchestration
+  - Google Gemini (gemini-flash-lite-latest) for chat
+  - Google text-embedding-004 for embeddings
+- **Vector Database**: ChromaDB Cloud
+- **Styling**: Tailwind CSS 4
+- **State Management**: React Context API
+- **UI Components**: Custom components with Lucide icons
 
-## Installation
+## 📋 Prerequisites
 
-### Prerequisites
+- Node.js 20+ and npm
+- Google API key with Gemini API access
+- ChromaDB Cloud account (or local ChromaDB server)
 
-- Python 3.8+
-- pip package manager
-- Google API key for Gemini model access
+## 🚀 Getting Started
 
-### Step 1: Clone the Repository
+### 1. Clone the Repository
 
-
-### Step 2: Create .env File
-
-Create a `.env` file in the root directory with your Google API key:
-
-```shell
-GOOGLE_API_KEY="your-google-api-key"
+```bash
+git clone <repository-url>
+cd Rag-ChatBot
 ```
 
-### Step 3: Install Dependencies
+### 2. Install Dependencies
 
-```shell
-pip install -r requirements.txt
+```bash
+npm install
 ```
 
-## Adding Documents
+### 3. Configure Environment Variables
 
-The API uses document embeddings to provide accurate information. You need to add PDF documents to the `docs` folder:
+Create a `.env` file in the root directory:
 
-1. Create a `docs` folder in the root directory if it doesn't exist
-2. Place relevant PDF documents about women's health in this folder
-3. The system will automatically load and index these documents on startup
+```env
+# Google AI Configuration
+GOOGLE_API_KEY=your-google-api-key-here
 
-## Running the API
+# Model Configuration
+MODEL=models/gemini-flash-lite-latest
+EMBEDDING_MODEL=models/text-embedding-004
 
-Start the API server with:
+# ChromaDB Cloud Configuration
+CHROMADB_API_KEY=your-chromadb-api-key
+CHROMADB_TENANT=your-tenant-id
+CHROMADB_DATABASE=your-database-name
 
-```shell
-python app/app.py
+# Application Configuration
+LOG_LEVEL=info
+NODE_ENV=development
 ```
 
-By default, the server will run on `http://localhost:8300`. You can modify the port in the `app.py` file if needed.
+### 4. Prepare Your Documents
 
-## API Endpoints
+1. Place your PDF documents in the `data/docs/` folder
+2. The application will process these documents for RAG
 
-### 1. Ask a Question
+### 5. Run Development Server
 
-**Endpoint:** `POST /query`
-
-Create a new conversation or continue an existing one by asking a question.
-
-**Request Body:**
-```json
-{
-  "question": "Your question here",
-  "session_id": "optional-session-id"
-}
+```bash
+npm run dev
 ```
 
-If no `session_id` is provided, a new session will be created.
+The application will be available at `http://localhost:3000`
 
-**Response:**
-```json
-{
-  "answer": "The response to your question",
-  "session_id": "unique-session-id",
-  "sources": {
-    "document_name.pdf": [1, 2]
+### 6. Initialize Vector Database
+
+On first run, initialize the vector database:
+- Navigate to the Documents tab in the UI
+- Upload your PDF documents
+- Click "Rebuild Embeddings" button
+
+Alternatively, call the initialization API:
+```bash
+curl -X POST http://localhost:3000/api/init
+```
+
+## 📁 Project Structure
+
+```
+Rag-ChatBot/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── api/               # API routes (backend)
+│   │   │   ├── auth/         # Authentication endpoints
+│   │   │   ├── documents/    # Document management
+│   │   │   ├── prompts/      # Prompt configuration
+│   │   │   ├── query/        # RAG query endpoint
+│   │   │   ├── history/      # Chat history
+│   │   │   └── init/         # Vector DB initialization
+│   │   ├── layout.tsx        # Root layout
+│   │   ├── page.tsx          # Home page
+│   │   └── globals.css       # Global styles
+│   ├── components/            # React components
+│   │   ├── Login.tsx         # Login form
+│   │   ├── DocumentUpload.tsx
+│   │   ├── DocumentList.tsx
+│   │   ├── PromptManager.tsx
+│   │   └── ConfirmDialog.tsx
+│   ├── contexts/              # React contexts
+│   │   └── AuthContext.tsx
+│   ├── lib/                   # Utilities & core logic
+│   │   ├── config.ts         # Configuration constants
+│   │   ├── types.ts          # TypeScript types & Zod schemas
+│   │   ├── vectordb.ts       # Vector database operations
+│   │   ├── chatbot.ts        # RAG chain logic
+│   │   ├── sessionManager.ts # Session management
+│   │   └── api.ts            # API client functions
+│   └── instrumentation.ts     # Next.js instrumentation
+├── data/                      # Application data (not in git)
+│   ├── docs/                 # PDF documents
+│   ├── vector_db/            # ChromaDB persistence (if local)
+│   ├── prompts.yaml          # System prompts
+│   └── users.json            # User credentials
+├── archived/                  # Legacy Python backend (reference)
+├── public/                    # Static assets
+├── Dockerfile                 # Docker configuration
+├── docker-compose.yml         # Docker Compose setup
+└── package.json              # Dependencies
+
+```
+
+## 🔌 API Endpoints
+
+### Chat & RAG
+
+- `POST /api/query` - Ask a question with RAG
+  ```json
+  {
+    "question": "Your question here",
+    "session_id": "optional-session-id"
   }
-}
+  ```
+
+- `GET /api/history/[sessionId]` - Get chat history
+- `DELETE /api/history/[sessionId]` - Clear chat history
+
+### Documents
+
+- `GET /api/documents` - List all documents
+- `POST /api/documents/upload` - Upload PDF
+- `DELETE /api/documents/[filename]` - Delete document
+- `GET /api/documents/[filename]/download` - Download document
+- `POST /api/documents/rebuild-embeddings` - Rebuild vector database
+
+### Prompts
+
+- `GET /api/prompts` - Get current prompts
+- `PUT /api/prompts` - Update prompts
+
+### Initialization
+
+- `POST /api/init` - Initialize vector database
+- `GET /api/init` - Check initialization status
+
+### Authentication
+
+- `POST /api/auth/login` - User login
+
+## 🐳 Docker Deployment
+
+### Build and Run with Docker Compose
+
+```bash
+# Build and start
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
 ```
 
-The `sources` field lists the document names and page numbers used to answer the question.
+### Build Docker Image Manually
 
-### 2. Get Conversation History
+```bash
+docker build -t women-health-assistant:latest .
+docker run -p 3000:3000 --env-file .env women-health-assistant:latest
+```
 
-**Endpoint:** `GET /history/{session_id}`
+## 📝 Configuration
 
-Retrieve the full conversation history for a specific session.
+### Prompt Configuration
 
-**Response:**
+Edit `data/prompts.yaml` to customize system prompts:
+
+```yaml
+rag_prompt_template: |
+  Context: {context}
+
+  Question: {question}
+
+  Answer the question based on the context provided.
+
+system_message: |
+  You are a helpful medical assistant specializing in women's health.
+```
+
+### User Management
+
+Edit `data/users.json` to manage users:
+
 ```json
 {
-  "session_id": "your-session-id",
-  "history": [
+  "users": [
     {
-      "role": "human",
-      "content": "Question asked"
-    },
-    {
-      "role": "ai",
-      "content": "Answer provided"
+      "username": "admin",
+      "password": "sha256-hashed-password",
+      "name": "Administrator"
     }
   ]
 }
 ```
 
-### 3. Clear Conversation History
-
-**Endpoint:** `DELETE /history/{session_id}`
-
-Clear the conversation history for a specific session while keeping the session alive.
-
-**Response:**
-```json
-{
-  "message": "Chat history for session your-session-id has been cleared"
-}
+Generate password hash:
+```bash
+echo -n "your-password" | sha256sum
 ```
 
-## Example Usage
+## 🔧 Development
 
-### Start a New Conversation
+### Build for Production
 
-```shell
-curl -X POST "http://localhost:8300/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Các triệu chứng rối loạn nội tiết?"}'
+```bash
+npm run build
+npm start
 ```
 
-This will return a response with a new `session_id`.
+### Linting
 
-### Continue the Conversation
-
-```shell
-curl -X POST "http://localhost:8300/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Khi nào tôi cần gặp bác sĩ phụ khoa?", "session_id": "0001"}'
+```bash
+npm run lint
 ```
 
-### View Conversation History
+### Type Checking
 
-```shell
-curl -X GET "http://localhost:8300/history/0001"
-```
+TypeScript will automatically check types during development and build.
 
-### Clear Conversation History
+## 🗂️ Data Persistence
 
-```shell
-curl -X DELETE "http://localhost:8300/history/0001"
-```
+- **Documents**: Stored in `data/docs/`
+- **Vector Database**: ChromaDB Cloud (or local in `data/vector_db/`)
+- **User Data**: `data/users.json`
+- **Prompts**: `data/prompts.yaml`
+- **Session Data**: In-memory (consider Redis for production)
 
-## Session Management
+## 🔐 Security Notes
 
-- Sessions automatically expire after 30 minutes of inactivity
-- Each session has its own conversation history
-- Session IDs are UUID strings generated by the server
-- To start a new conversation with a clean history, you can either let your current session expire, explicitly clear the history, or simply don't provide a session ID
+- Never commit `.env` file to version control
+- Store API keys securely
+- Use strong passwords for user accounts
+- In production, consider:
+  - HTTPS/TLS encryption
+  - Rate limiting
+  - Redis for session management
+  - Database for user management
+  - Regular security audits
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
-### Common Issues
+### ChromaDB Connection Issues
+- Verify ChromaDB Cloud credentials in `.env`
+- Check network connectivity
+- For local ChromaDB: Ensure server is running on port 8000
 
-1. **API returns 500 error**: Check that your Google API key is valid and has access to the Gemini model
-2. **No documents found error**: Ensure you've added PDF files to the `docs` folder
-3. **No answer provided**: The question might be too specific or outside the scope of the documents provided
+### Documents Not Loading
+- Check PDF files are in `data/docs/`
+- Verify file permissions
+- Rebuild embeddings via UI or API
 
-### Logs
+### Build Errors
+- Clear `.next` folder: `rm -rf .next`
+- Clear node_modules: `rm -rf node_modules && npm install`
+- Check Node.js version: `node --version` (should be 20+)
 
-Check the API server logs for detailed error information.
+## 📚 Migration Note
 
-# build 
-docker build -t medical-chatbot-api:0.0.2 .             
+This project was migrated from a Python/FastAPI backend to a unified Next.js full-stack application. The legacy Python code is preserved in the `archived/` folder for reference. See `archived/MIGRATION_SUMMARY.md` for details.
+
+## 📄 License
+
+[Your License Here]
+
+## 🤝 Contributing
+
+[Your Contributing Guidelines Here]
+
+## 📞 Support
+
+For issues and questions, please open a GitHub issue or contact the development team.

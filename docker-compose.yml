@@ -1,24 +1,25 @@
 services:
   women-health-assistant:
-    # build: .
-    image: medical-chatbot-api:0.0.3
+    build: .
+    # image: women-health-assistant:latest
+    container_name: women-health-assistant
     ports:
-      - "8300:8300"
+      - "3000:3000"
     environment:
+      - NODE_ENV=production
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MODEL=${MODEL}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - CHROMADB_API_KEY=${CHROMADB_API_KEY}
+      - CHROMADB_TENANT=${CHROMADB_TENANT}
+      - CHROMADB_DATABASE=${CHROMADB_DATABASE}
+      - LOG_LEVEL=${LOG_LEVEL}
     volumes:
-      - ./docs:/app/docs
-      - ./Vector_DB - Documents:/app/Vector_DB - Documents
+      - ./data:/app/data
     restart: unless-stopped
-    networks:
-      - my_shared_network
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8300/docs"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-
-networks:
-  my_shared_network:
-    external: true
-    name: my_shared_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
