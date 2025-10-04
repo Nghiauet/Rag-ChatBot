@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, Lock, User } from 'lucide-react';
+import { FileText, Lock, User, Moon, Sun } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface LoginProps {
   onLoginSuccess: (username: string) => void;
@@ -12,6 +13,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { theme, toggle } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +63,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--md-sys-color-surface)' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 relative" style={{ background: 'var(--md-sys-color-surface)' }}>
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggle}
+        className="absolute top-4 right-4 p-3 rounded-full transition-all hover:bg-opacity-10"
+        style={{
+          background: 'color-mix(in oklab, var(--md-sys-color-on-surface) 8%, transparent)',
+          color: 'var(--md-sys-color-on-surface)',
+        }}
+        aria-label="Toggle theme"
+      >
+        {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+      </button>
+
       <div className="max-w-md w-full">
         {/* Logo/Header */}
         <div className="text-center mb-8">
@@ -79,7 +94,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         {/* Login Card */}
         <div className="m3-card p-8 elevation-1">
-          <h2 className="text-2xl font-medium mb-8">
+          <h2 className="text-2xl font-medium mb-8 text-center">
             Sign In
           </h2>
 
@@ -124,9 +139,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </div>
             </div>
 
-            <button type="submit" disabled={isLoading} className="m3-btn m3-btn--filled w-full mt-6">
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
+            <div className="flex justify-center mt-6">
+              <button type="submit" disabled={isLoading} className="m3-btn m3-btn--filled px-16">
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </div>
           </form>
 
         </div>
