@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
-import fs from 'fs';
+import * as fs from 'fs/promises';
 import path from 'path';
 
 interface User {
@@ -15,7 +15,36 @@ interface UsersConfig {
 // to create new user: echo -n "CoWP@2025" | sha256sum
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json();
+    // Be resilient to different content types or empty bodies
+    let username = '';
+    let password = '';
+
+    try {
+      const contentType = request.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await request.json().catch(() => null);
+        username = body?.username ?? '';
+        password = body?.password ?? '';
+      } else if (contentType.includes('application/x-www-form-urlencoded')) {
+        const form = await request.formData();
+        username = String(form.get('username') || '');
+        password = String(form.get('password') || '');
+      } else {
+        // Fallback: try to read text and parse if present
+        const text = await request.text();
+        if (text) {
+          try {
+            const body = JSON.parse(text);
+            username = body?.username ?? '';
+            password = body?.password ?? '';
+          } catch {
+            // ignore; will validate below
+          }
+        }
+      }
+    } catch {
+      // ignore and rely on validation below
+    }
 
     if (!username || !password) {
       return NextResponse.json(
@@ -24,9 +53,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read users from config file
+    // Read users from config file (async to avoid blocking)
     const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
-    const usersData = fs.readFileSync(usersFilePath, 'utf-8');
+    const usersData = await fs.readFile(usersFilePath, 'utf-8');
     const config: UsersConfig = JSON.parse(usersData);
 
     // Hash the input password with SHA-256
@@ -54,9 +83,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    const message = error instanceof SyntaxError ? 'Invalid JSON body' : 'Internal server error';
+    const status = error instanceof SyntaxError ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

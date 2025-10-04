@@ -44,10 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--md-sys-color-surface)' }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4" style={{ color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 70%, transparent)' }}>Loading...</p>
         </div>
       </div>
     );

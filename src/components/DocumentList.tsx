@@ -66,7 +66,11 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       await fetchDocuments(); // Refresh the list
     } catch (error: any) {
       console.error('Delete error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to delete document');
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('Request timed out. Please check your connection and try again.');
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to delete document');
+      }
     } finally {
       setDeleting(null);
       setDeleteDialog({ isOpen: false, filename: null });
@@ -114,7 +118,13 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       });
     } catch (error: any) {
       console.error('Rebuild embeddings error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to rebuild embeddings');
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('Rebuild operation timed out. This may happen with many/large documents. Please try again or reduce document count.', {
+          duration: 8000,
+        });
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to rebuild embeddings');
+      }
     } finally {
       setRebuildingEmbeddings(false);
       setRebuildDialog(false);
@@ -124,7 +134,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--md-sys-color-primary)' }} />
       </div>
     );
   }
@@ -132,37 +142,33 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   if (documents.length === 0) {
     return (
       <div className="text-center py-16 px-4">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl mb-4">
-          <FolderOpen className="w-8 h-8 text-gray-400" />
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ background: 'var(--md-sys-color-surface-container-high)', color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 70%, transparent)' }}>
+          <FolderOpen className="w-8 h-8" />
         </div>
-        <p className="text-lg font-medium text-gray-900 mb-1">No documents yet</p>
-        <p className="text-sm text-gray-500">Upload a PDF file to get started</p>
+        <p className="text-lg font-medium mb-1">No documents yet</p>
+        <p className="text-sm opacity-70">Upload a PDF file to get started</p>
       </div>
     );
   }
 
   return (
     <div className="w-full max-w-5xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+      <div className="m3-card">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100">
+        <div className="px-6 py-5" style={{ borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-50 rounded-xl">
-                <FileText className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl" style={{ background: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)' }}>
+                <FileText className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 className="text-lg font-medium">
                   Documents
                 </h3>
-                <p className="text-sm text-gray-500">{documents.length} files uploaded</p>
+                <p className="text-sm opacity-70">{documents.length} files uploaded</p>
               </div>
             </div>
-            <button
-              onClick={handleRebuildEmbeddings}
-              disabled={rebuildingEmbeddings || documents.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-green-600 text-white rounded-xl hover:bg-green-700 hover:shadow-lg hover:shadow-green-600/20 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200"
-            >
+            <button onClick={handleRebuildEmbeddings} disabled={rebuildingEmbeddings || documents.length === 0} className="m3-btn m3-btn--filled">
               {rebuildingEmbeddings ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -179,22 +185,25 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
         </div>
 
         {/* Document List */}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
           {documents.map((doc) => (
             <div
               key={doc.filename}
-              className="px-6 py-4 hover:bg-gray-50/50 transition-colors duration-150"
+              className="px-6 py-4 transition-colors duration-150"
+              style={{
+                background: 'transparent'
+              }}
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                    <FileText className="w-6 h-6 text-blue-600" />
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)' }}>
+                    <FileText className="w-6 h-6" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate mb-1">
+                    <p className="text-sm font-medium truncate mb-1">
                       {doc.filename}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs opacity-70">
                       <span>{formatFileSize(doc.size)}</span>
                       <span>•</span>
                       <span>{formatDate(doc.upload_date)}</span>
@@ -203,18 +212,11 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDownload(doc.filename)}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all duration-150"
-                  >
+                  <button onClick={() => handleDownload(doc.filename)} className="m3-btn m3-btn--tonal">
                     <Download className="w-4 h-4" />
                     <span>Download</span>
                   </button>
-                  <button
-                    onClick={() => handleDelete(doc.filename)}
-                    disabled={deleting === doc.filename}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => handleDelete(doc.filename)} disabled={deleting === doc.filename} className="m3-btn m3-btn--outline" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)' }}>
                     {deleting === doc.filename ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />

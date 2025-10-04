@@ -50,43 +50,53 @@ export default function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200"
+        className="max-w-md w-full animate-in zoom-in-95 duration-200 elevation-3"
+        style={{
+          background: 'var(--md-sys-color-surface)',
+          border: '1px solid var(--md-sys-color-outline-variant)',
+          borderRadius: 'var(--md-sys-shape-corner-xl)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-4">
+        <div className="flex items-start justify-between p-6 pb-3">
           <div className="flex items-start gap-4">
-            <div className={`flex items-center justify-center w-12 h-12 rounded-2xl ${styles.icon}`}>
+            <div
+              className={`flex items-center justify-center w-12 h-12 rounded-[var(--md-sys-shape-corner-xl)] ${styles.icon}`}
+            >
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-xl font-medium text-gray-900 mb-2">
+              <h3 className="text-xl font-medium mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                 {title}
               </h3>
-              <p className="text-sm text-gray-600 leading-relaxed">
+              <p className="text-sm leading-relaxed" style={{ color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 80%, transparent)' }}>
                 {message}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+            className="m3-icon-btn"
+            title="Close"
+            aria-label="Close"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl">
+        <div className="flex items-center justify-end gap-3 px-6 py-4" style={{ background: 'var(--md-sys-color-surface-container)' }}>
           <button
             onClick={onClose}
-            className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-150"
+            className="m3-btn m3-btn--outline"
           >
             {cancelText}
           </button>
           <button
             onClick={handleConfirm}
-            className={`px-4 py-2.5 text-sm font-medium text-white rounded-xl transition-all duration-200 ${styles.button}`}
+            className={`m3-btn ${styles.button.includes('bg-red-') || styles.button.includes('bg-amber-') ? 'm3-btn--filled' : 'm3-btn--tonal'}`}
+            style={styles.button.includes('bg-red-') || styles.button.includes('bg-amber-') ? {} : {}}
           >
             {confirmText}
           </button>

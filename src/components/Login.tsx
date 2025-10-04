@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { FileText, Lock, User } from 'lucide-react';
 
 interface LoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (username: string) => void;
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
@@ -24,70 +24,80 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setIsLoading(true);
 
     try {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
       if (response.ok && data.success) {
         toast.success('Login successful!');
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('username', data.user.username);
-        onLoginSuccess();
+        // Don't set localStorage here - let AuthContext handle it
+        onLoginSuccess(data.user.username);
       } else {
         toast.error(data.error || 'Invalid username or password');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      toast.error('Failed to login. Please try again.');
+      if (error.name === 'AbortError') {
+        toast.error('Login request timed out. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to login. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--md-sys-color-surface)' }}>
       <div className="max-w-md w-full">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-6 shadow-lg shadow-blue-600/30">
-            <FileText className="w-8 h-8 text-white" strokeWidth={2} />
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 mb-6 elevation-2"
+            style={{ background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', borderRadius: 'var(--md-sys-shape-corner-xl)' }}
+          >
+            <FileText className="w-8 h-8" strokeWidth={2} />
           </div>
-          <h1 className="text-3xl font-normal text-gray-900 mb-2">
+          <h1 className="text-3xl font-normal mb-2">
             Women's Health Assistant
           </h1>
-          <p className="text-base text-gray-500">Management Dashboard</p>
+          <p className="text-base opacity-70">Management Dashboard</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-3xl shadow-lg shadow-gray-200/50 p-8 border border-gray-100">
-          <h2 className="text-2xl font-medium text-gray-900 mb-8">
+        <div className="m3-card p-8 elevation-1">
+          <h2 className="text-2xl font-medium mb-8">
             Sign In
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
+              <label htmlFor="username" className="m3-label">
                 Username
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 60%, transparent)' }}>
+                  <User className="h-5 w-5" />
                 </div>
                 <input
                   id="username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 placeholder:text-gray-400 bg-gray-50 hover:bg-white"
+                  className="m3-input"
                   placeholder="Enter username"
                   disabled={isLoading}
                 />
@@ -95,40 +105,33 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
+              <label htmlFor="password" className="m3-label">
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 60%, transparent)' }}>
+                  <Lock className="h-5 w-5" />
                 </div>
                 <input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 placeholder:text-gray-400 bg-gray-50 hover:bg-white"
+                  className="m3-input"
                   placeholder="Enter password"
                   disabled={isLoading}
                 />
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-medium hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/30 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 mt-6"
-            >
+            <button type="submit" disabled={isLoading} className="m3-btn m3-btn--filled w-full mt-6">
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
         </div>
 
-        <p className="text-center text-gray-400 text-sm mt-6">
+        <p className="text-center text-sm mt-6" style={{ color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 60%, transparent)' }}>
           Secure access to document and prompt management
         </p>
       </div>

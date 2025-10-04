@@ -39,9 +39,13 @@ export default function PromptManager() {
     try {
       await promptAPI.updatePrompts(prompts);
       toast.success('Prompts updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving prompts:', error);
-      toast.error('Failed to save prompts');
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('Request timed out. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to save prompts');
+      }
     } finally {
       setSaving(false);
     }
@@ -80,12 +84,12 @@ export default function PromptManager() {
     return (
       <div className="max-w-5xl mx-auto p-6">
         <div className="animate-pulse space-y-6">
-          <div className="h-10 bg-gray-200 rounded-xl w-1/3"></div>
+          <div className="h-10 rounded-xl w-1/3 bg-[var(--md-sys-color-surface-container-high)]"></div>
           <div className="space-y-5">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100">
-                <div className="h-5 bg-gray-200 rounded w-1/4 mb-4"></div>
-                <div className="h-32 bg-gray-100 rounded-xl"></div>
+              <div key={i} className="rounded-2xl p-6 border" style={{ background: 'var(--md-sys-color-surface)', borderColor: 'var(--md-sys-color-outline-variant)' }}>
+                <div className="h-5 rounded w-1/4 mb-4 bg-[var(--md-sys-color-surface-container-high)]"></div>
+                <div className="h-32 rounded-xl bg-[var(--md-sys-color-surface-container-highest)]"></div>
               </div>
             ))}
           </div>
@@ -100,8 +104,9 @@ export default function PromptManager() {
       title: 'System Prompt',
       description: 'Defines the AI assistant\'s role and behavior',
       icon: MessageCircle,
-      iconBg: 'bg-blue-50',
-      iconColor: 'text-blue-600',
+      // Use theme variables so it works in both light/dark
+      iconBg: 'bg-[var(--md-sys-color-primary-container)]',
+      iconColor: 'text-[var(--md-sys-color-on-primary-container)]',
       rows: 8
     },
     {
@@ -109,8 +114,8 @@ export default function PromptManager() {
       title: 'User Greeting',
       description: 'Message shown when users start a conversation',
       icon: User,
-      iconBg: 'bg-green-50',
-      iconColor: 'text-green-600',
+      iconBg: 'bg-[var(--md-sys-color-surface-container-high)]',
+      iconColor: 'text-[var(--md-sys-color-on-surface)]',
       rows: 4
     },
     {
@@ -118,8 +123,8 @@ export default function PromptManager() {
       title: 'Context Instruction',
       description: 'Instructions for using context from documents',
       icon: FileSearch,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
+      iconBg: 'bg-[var(--md-sys-color-secondary-container)]',
+      iconColor: 'text-[var(--md-sys-color-on-secondary-container)]',
       rows: 4
     },
     {
@@ -127,8 +132,8 @@ export default function PromptManager() {
       title: 'Fallback Response',
       description: 'Response when AI cannot answer based on context',
       icon: MessageSquare,
-      iconBg: 'bg-red-50',
-      iconColor: 'text-red-600',
+      iconBg: 'bg-[var(--md-sys-color-surface-container-high)]',
+      iconColor: 'text-[var(--md-sys-color-on-surface)]',
       rows: 4
     }
   ];
@@ -138,12 +143,18 @@ export default function PromptManager() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="flex items-center justify-center w-12 h-12 bg-purple-50 rounded-2xl">
-            <MessageSquare className="w-6 h-6 text-purple-600" />
+          <div
+            className="flex items-center justify-center w-12 h-12 rounded-2xl"
+            style={{
+              background: 'var(--md-sys-color-primary-container)',
+              color: 'var(--md-sys-color-on-primary-container)'
+            }}
+          >
+            <MessageSquare className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-medium text-gray-900">Prompt Management</h2>
-            <p className="text-sm text-gray-500">Configure AI assistant behavior</p>
+            <h2 className="text-2xl font-medium">Prompt Management</h2>
+            <p className="text-sm opacity-70">Configure AI assistant behavior</p>
           </div>
         </div>
         <button
@@ -176,12 +187,16 @@ export default function PromptManager() {
           return (
             <div
               key={section.field}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200"
+              className="rounded-2xl shadow-sm border overflow-hidden transition-all duration-200"
+              style={{
+                background: 'var(--md-sys-color-surface)',
+                borderColor: 'var(--md-sys-color-outline-variant)'
+              }}
             >
               {/* Header - Always Visible */}
               <button
                 onClick={() => toggleSection(section.field)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full px-6 py-4 flex items-center justify-between transition-colors hover:bg-[color-mix(in_oklab,var(--md-sys-color-on-surface)_8%,transparent)]"
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className={`flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 ${section.iconBg}`}>
@@ -189,20 +204,20 @@ export default function PromptManager() {
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-base font-medium text-gray-900">
+                      <h3 className="text-base font-medium">
                         {section.title}
                       </h3>
-                      <span className="text-xs text-gray-500 font-medium">
+                      <span className="text-xs opacity-70 font-medium">
                         {charCount} characters
                       </span>
                     </div>
                     {!isExpanded && (
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-sm opacity-70 truncate">
                         {getPreviewText(content)}
                       </p>
                     )}
                     {isExpanded && (
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm opacity-70">
                         {section.description}
                       </p>
                     )}
@@ -210,22 +225,26 @@ export default function PromptManager() {
                 </div>
                 <div className="flex-shrink-0 ml-4">
                   {isExpanded ? (
-                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                    <ChevronUp className="w-5 h-5 text-[var(--md-sys-color-outline)]" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                    <ChevronDown className="w-5 h-5 text-[var(--md-sys-color-outline)]" />
                   )}
                 </div>
               </button>
 
               {/* Expanded Content */}
               {isExpanded && (
-                <div className="px-6 pb-6 pt-2 border-t border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                <div
+                  className="px-6 pb-6 pt-2 border-t animate-in slide-in-from-top-2 duration-200"
+                  style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}
+                >
                   <textarea
                     id={section.field}
                     value={content}
                     onChange={(e) => handleInputChange(section.field, e.target.value)}
                     rows={section.rows}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-vertical bg-gray-50 hover:bg-white text-gray-900 transition-colors text-sm leading-relaxed"
+                    className="w-full px-4 py-3 rounded-xl outline-none resize-vertical transition-colors text-sm leading-relaxed"
+                    style={{ border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)' }}
                     placeholder={`Enter ${section.title.toLowerCase()}...`}
                   />
                 </div>
@@ -236,28 +255,37 @@ export default function PromptManager() {
       </div>
 
       {/* Tips Card */}
-      <div className="mt-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+      <div
+        className="mt-8 rounded-2xl p-6 border"
+        style={{
+          background: 'linear-gradient(135deg, color-mix(in oklab, var(--md-sys-color-surface-container-high) 80%, transparent), var(--md-sys-color-surface))',
+          borderColor: 'var(--md-sys-color-outline-variant)'
+        }}
+      >
         <div className="flex items-start gap-3">
-          <div className="flex items-center justify-center w-9 h-9 bg-blue-100 rounded-xl flex-shrink-0">
-            <Lightbulb className="w-5 h-5 text-blue-600" />
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0"
+            style={{ background: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)' }}
+          >
+            <Lightbulb className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-medium text-gray-900 mb-3">Tips for Effective Prompts</h3>
-            <ul className="text-sm text-gray-700 space-y-2">
+            <h3 className="text-base font-medium mb-3">Tips for Effective Prompts</h3>
+            <ul className="text-sm opacity-80 space-y-2">
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
+                <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
                 <span>Be specific about the AI's role and expertise area</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
+                <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
                 <span>Include important guidelines and limitations</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
+                <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
                 <span>Maintain a consistent tone and style</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
+                <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
                 <span>Test your prompts thoroughly before deploying</span>
               </li>
             </ul>

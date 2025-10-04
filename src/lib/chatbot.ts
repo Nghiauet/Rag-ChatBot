@@ -3,30 +3,52 @@ import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts
 import { AIMessage, HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { Collection } from 'chromadb';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as yaml from 'js-yaml';
 import { PROMPTS_FILE, GOOGLE_API_KEY, MODEL, EMBEDDING_MODEL } from './config';
 import { PromptConfig, ChatMessage } from './types';
 
+// Cache prompts to avoid reading file on every request
+let promptsCache: PromptConfig | null = null;
+let promptsCacheTime: number = 0;
+const CACHE_TTL = 5000; // 5 seconds cache
+
 /**
- * Load prompt configuration from prompts.yaml file
+ * Load prompt configuration from prompts.yaml file (async with caching)
  * @returns PromptConfig object
  */
-function loadPromptsConfig(): PromptConfig {
+async function loadPromptsConfig(): Promise<PromptConfig> {
+  // Return cached version if still valid
+  const now = Date.now();
+  if (promptsCache && (now - promptsCacheTime) < CACHE_TTL) {
+    return promptsCache;
+  }
+
   try {
-    const fileContents = fs.readFileSync(PROMPTS_FILE, 'utf8');
+    const fileContents = await fs.readFile(PROMPTS_FILE, 'utf8');
     const prompts = yaml.load(fileContents) as PromptConfig;
     console.log(`Prompts configuration loaded successfully from ${PROMPTS_FILE}`);
+
+    // Update cache
+    promptsCache = prompts;
+    promptsCacheTime = now;
+
     return prompts;
   } catch {
     console.warn(`${PROMPTS_FILE} not found, using fallback configuration`);
     // Fallback configuration if prompts.yaml doesn't exist
-    return {
+    const fallback = {
       system_prompt: "You are a helpful women's health assistant.",
       context_instruction: "Based on the provided context, answer the user's question.",
       fallback_response: "I don't have specific information about that topic.",
       user_greeting: "Hello! How can I help you with women's health questions today?",
     };
+
+    // Cache fallback too
+    promptsCache = fallback;
+    promptsCacheTime = now;
+
+    return fallback;
   }
 }
 
@@ -91,8 +113,8 @@ async function getResponse(
   console.log(`Generating response for question: ${question.substring(0, 100)}...`);
   console.log(`Chat history length: ${chatHistory.length}`);
 
-  // Load dynamic prompt configuration
-  const promptsConfig = loadPromptsConfig();
+  // Load dynamic prompt configuration (async with caching)
+  const promptsConfig = await loadPromptsConfig();
 
   // Retrieve relevant context from vector database
   const contextDocs = await retrieveContext(collection, question);

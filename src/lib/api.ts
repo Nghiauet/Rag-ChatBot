@@ -1,7 +1,10 @@
 import axios from 'axios';
 
 // Use relative paths for Next.js API routes (no baseURL needed)
-const api = axios.create();
+// Configure timeout to prevent indefinite hanging
+const api = axios.create({
+  timeout: 120000, // 2 minutes for normal operations
+});
 
 export interface DocumentInfo {
   filename: string;
@@ -86,7 +89,10 @@ export const promptAPI = {
 export const embeddingAPI = {
   // Rebuild embeddings for all documents
   rebuildEmbeddings: async (): Promise<{ message: string; documents_processed: string[] }> => {
-    const response = await api.post('/api/documents/rebuild-embeddings');
+    // Use longer timeout for embedding rebuild (10 minutes)
+    const response = await api.post('/api/documents/rebuild-embeddings', {}, {
+      timeout: 600000, // 10 minutes for embedding operations
+    });
     return response.data;
   },
 };

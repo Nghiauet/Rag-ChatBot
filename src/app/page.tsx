@@ -7,10 +7,13 @@ import PromptManager from '@/components/PromptManager';
 import Login from '@/components/Login';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, MessageSquare, LogOut } from 'lucide-react';
+import { FileText, MessageSquare, LogOut, Sun, Moon } from 'lucide-react';
+import { M3AppBar, M3Button, M3Tabs, M3Tab } from '@/components/ui/M3';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function Home() {
   const { isAuthenticated, username, login, logout } = useAuth();
+  const { theme, toggle } = useTheme();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<'documents' | 'prompts'>('documents');
 
@@ -18,8 +21,8 @@ export default function Home() {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  const handleLoginSuccess = () => {
-    login(username || 'admin');
+  const handleLoginSuccess = (loggedInUsername: string) => {
+    login(loggedInUsername);
   };
 
   // Show login screen if not authenticated
@@ -36,85 +39,70 @@ export default function Home() {
     <>
       <Toaster position="top-right" />
 
-      <div className="min-h-screen bg-gray-50">
-        {/* App Bar */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-xl">
-                  <FileText className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-medium text-gray-900">
-                    Women's Health Assistant
-                  </h1>
-                  <p className="text-xs text-gray-500">Management Dashboard</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="text-sm text-gray-600">
-                  <span className="text-gray-500">Logged in as </span>
-                  <span className="font-medium text-gray-900">{username}</span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all duration-150"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
-                </button>
-              </div>
+      <div className="min-h-screen">
+        {/* App Bar (Material 3) */}
+        <M3AppBar>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center w-10 h-10"
+              style={{
+                background: 'var(--md-sys-color-primary)',
+                color: 'var(--md-sys-color-on-primary)',
+                borderRadius: 'var(--md-sys-shape-corner-xl)'
+              }}
+            >
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-lg font-medium">Women's Health Assistant</h1>
+              <p className="text-xs opacity-70">Management Dashboard</p>
             </div>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setActiveTab('documents')}
-                className={`
-                  inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
-                  ${activeTab === 'documents'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                  }
-                `}
-              >
-                <FileText className="w-4 h-4" />
-                <span>Documents</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('prompts')}
-                className={`
-                  inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
-                  ${activeTab === 'prompts'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                  }
-                `}
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Prompts</span>
-              </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggle}
+              className="m3-icon-btn"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <div className="text-sm opacity-80">
+              <span className="opacity-70">Logged in as </span>
+              <span className="font-medium">{username}</span>
             </div>
+            <M3Button variant="tonal" onClick={logout}>
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </M3Button>
           </div>
-        </div>
+        </M3AppBar>
 
-        {/* Tab Content */}
+        {/* Tabs (Material 3) */}
+        <M3Tabs>
+          <M3Tab selected={activeTab === 'documents'} onClick={() => setActiveTab('documents')}>
+            <span className="inline-flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Documents
+            </span>
+          </M3Tab>
+          <M3Tab selected={activeTab === 'prompts'} onClick={() => setActiveTab('prompts')}>
+            <span className="inline-flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" /> Prompts
+            </span>
+          </M3Tab>
+        </M3Tabs>
+
+        {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {activeTab === 'documents' && (
             <div className="space-y-12">
               {/* Upload Section */}
               <div>
                 <div className="mb-6">
-                  <h2 className="text-xl font-medium text-gray-900 mb-1">
+                  <h2 className="text-xl font-medium mb-1">
                     Upload Document
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm opacity-70">
                     Add PDF files to your knowledge base
                   </p>
                 </div>
@@ -124,10 +112,10 @@ export default function Home() {
               {/* Documents List */}
               <div>
                 <div className="mb-6">
-                  <h2 className="text-xl font-medium text-gray-900 mb-1">
+                  <h2 className="text-xl font-medium mb-1">
                     Your Documents
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm opacity-70">
                     Manage your uploaded documents
                   </p>
                 </div>
