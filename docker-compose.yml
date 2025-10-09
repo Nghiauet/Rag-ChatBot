@@ -1,10 +1,10 @@
 services:
   women-health-assistant:
     build: .
-    # image: women-health-assistant:latest
+    image: women-health-assistant:0.4
     container_name: women-health-assistant
     ports:
-      - "3000:3000"
+      - "3003:3000"
     environment:
       - NODE_ENV=production
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
