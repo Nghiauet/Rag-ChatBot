@@ -82,3 +82,10 @@ data/docs_backup/
 data/
 # Keep archived folder for reference (not ignored)
 # archived/
+docs/
+Vector_DB - Documents/chroma.sqlite3
+Vector_DB - Documents/c068aab4-e417-4149-98d4-9bf9f14f91ce/data_level0.bin
+Vector_DB - Documents/c068aab4-e417-4149-98d4-9bf9f14f91ce/header.bin
+Vector_DB - Documents/c068aab4-e417-4149-98d4-9bf9f14f91ce/length.bin
+Vector_DB - Documents/c068aab4-e417-4149-98d4-9bf9f14f91ce/link_lists.bin
+METADATA_FLOW.md

@@ -101,7 +101,15 @@ export async function getVectorstore(
     console.log('Attempting to load existing collection from ChromaDB Cloud...');
     try {
       collection = await client.getCollection({
-        name: collectionName
+        name: collectionName,
+        embeddingFunction: {
+          generate: async (texts: string[]) => {
+            const embedResults = await Promise.all(
+              texts.map(text => embeddings.embedQuery(text))
+            );
+            return embedResults;
+          }
+        }
       });
       console.log('Successfully loaded existing vector database');
       return collection;
@@ -163,17 +171,32 @@ export async function getVectorstore(
         const batch = chunks.slice(i, i + batchSize);
         const ids = batch.map((_, idx) => `doc_${i + idx}`);
         const documents = batch.map(doc => doc.pageContent);
-        // Clean metadata to only include primitive types
+        // Clean metadata to only include primitive types and flatten nested structures
         const metadatas = batch.map(doc => {
           const cleaned: Record<string, string | number | boolean> = {};
+
+          // Extract source path
+          if (doc.metadata.source && typeof doc.metadata.source === 'string') {
+            cleaned.source = doc.metadata.source;
+          }
+
+          // Extract page number from nested loc object
+          if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
+            cleaned.page = doc.metadata.loc.pageNumber as number;
+          }
+
+          // Handle other primitive metadata fields
           for (const [key, value] of Object.entries(doc.metadata)) {
+            // Skip already processed fields and complex objects
+            if (key === 'source' || key === 'loc' || key === 'pdf') {
+              continue;
+            }
+
             if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
               cleaned[key] = value;
-            } else if (value !== null && value !== undefined) {
-              // Convert complex types to string
-              cleaned[key] = String(value);
             }
           }
+
           return cleaned;
         });
 

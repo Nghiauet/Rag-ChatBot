@@ -204,7 +204,7 @@ export async function getAnswerWithHistory(
     console.log(`Updated session history for ${sessionId} (new length: ${chatHistory.length})`);
 
     // Extract source metadata (only filename, not full path for security)
-    const sources: Record<string, number[]> = {};
+    const sourcesMap: Map<string, number[]> = new Map();
     for (const doc of context) {
       const sourcePath = doc.metadata.source as string;
       const page = doc.metadata.page as number;
@@ -214,19 +214,23 @@ export async function getAnswerWithHistory(
         // e.g., "/path/to/document.pdf" -> "document.pdf"
         const filename = sourcePath.split('/').pop() || sourcePath;
 
-        if (!sources[filename]) {
-          sources[filename] = [];
+        if (!sourcesMap.has(filename)) {
+          sourcesMap.set(filename, []);
         }
-        if (typeof page === 'number' && !sources[filename].includes(page)) {
-          sources[filename].push(page);
+        if (typeof page === 'number' && !sourcesMap.get(filename)!.includes(page)) {
+          sourcesMap.get(filename)!.push(page);
         }
       }
     }
 
-    // Sort page numbers for each source for better readability
-    Object.keys(sources).forEach(filename => {
-      sources[filename].sort((a, b) => a - b);
-    });
+    // Sort page numbers for each source and format with numbered prefix
+    const sources: Record<string, number[]> = {};
+    let index = 1;
+    for (const [filename, pages] of sourcesMap.entries()) {
+      pages.sort((a, b) => a - b);
+      sources[`${index}. ${filename}`] = pages;
+      index++;
+    }
 
     console.log(`Successfully processed question for session ${sessionId}. Sources: ${Object.keys(sources).length} documents`);
     return { response: answer, sources, chatHistory };
