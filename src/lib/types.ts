@@ -55,6 +55,62 @@ export const PromptUpdateRequestSchema = z.object({
   prompts: PromptConfigSchema,
 });
 
+// URL Document Schemas
+export const UrlDocumentSchema = z.object({
+  id: z.string(),
+  url: z.string().url(),
+  title: z.string(),
+  status: z.enum(['pending', 'fetched', 'indexed', 'error']),
+  contentType: z.enum(['html', 'pdf']).optional(),
+  dateAdded: z.string(),
+  lastFetched: z.string().optional(),
+  lastIndexed: z.string().optional(),
+  error: z.string().optional(),
+  // Store fetched content for later embedding
+  fetchedDocuments: z.array(z.object({
+    pageContent: z.string(),
+    metadata: z.record(z.union([z.string(), z.number(), z.boolean()])),
+  })).optional(),
+});
+
+export const UrlListResponseSchema = z.object({
+  urls: z.array(UrlDocumentSchema),
+});
+
+export const AddUrlRequestSchema = z.object({
+  url: z.string().url(),
+});
+
+export const AddUrlResponseSchema = z.object({
+  message: z.string(),
+  url: UrlDocumentSchema,
+});
+
+export const RefreshUrlResponseSchema = z.object({
+  message: z.string(),
+  url: UrlDocumentSchema,
+});
+
+// Bulk URL Schemas
+export const AddBulkUrlsRequestSchema = z.object({
+  urls: z.array(z.string().url()),
+});
+
+export const BulkUrlResultSchema = z.object({
+  url: z.string(),
+  status: z.enum(['success', 'error']),
+  message: z.string(),
+  document: UrlDocumentSchema.optional(),
+});
+
+export const AddBulkUrlsResponseSchema = z.object({
+  message: z.string(),
+  total: z.number(),
+  successful: z.number(),
+  failed: z.number(),
+  results: z.array(BulkUrlResultSchema),
+});
+
 // TypeScript types derived from schemas
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 export type QueryResponse = z.infer<typeof QueryResponseSchema>;
@@ -65,6 +121,14 @@ export type DocumentListResponse = z.infer<typeof DocumentListResponseSchema>;
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type PromptConfig = z.infer<typeof PromptConfigSchema>;
 export type PromptUpdateRequest = z.infer<typeof PromptUpdateRequestSchema>;
+export type UrlDocument = z.infer<typeof UrlDocumentSchema>;
+export type UrlListResponse = z.infer<typeof UrlListResponseSchema>;
+export type AddUrlRequest = z.infer<typeof AddUrlRequestSchema>;
+export type AddUrlResponse = z.infer<typeof AddUrlResponseSchema>;
+export type RefreshUrlResponse = z.infer<typeof RefreshUrlResponseSchema>;
+export type AddBulkUrlsRequest = z.infer<typeof AddBulkUrlsRequestSchema>;
+export type BulkUrlResult = z.infer<typeof BulkUrlResultSchema>;
+export type AddBulkUrlsResponse = z.infer<typeof AddBulkUrlsResponseSchema>;
 
 // Chat message type
 export interface ChatMessage {

@@ -167,7 +167,7 @@ export async function getAnswerWithHistory(
   collection: Collection
 ): Promise<{
   response: string;
-  sources: Record<string, number[]>;
+  sources: Record<string, number[] | string>;
   chatHistory: BaseMessage[];
 }> {
   console.log(`Processing question for session ${sessionId}: ${question.substring(0, 100)}...`);
@@ -203,32 +203,51 @@ export async function getAnswerWithHistory(
     sessionHistory.set(sessionId, chatHistory);
     console.log(`Updated session history for ${sessionId} (new length: ${chatHistory.length})`);
 
-    // Extract source metadata (only filename, not full path for security)
-    const sourcesMap: Map<string, number[]> = new Map();
+    // Extract source metadata - handle both PDFs and URLs
+    const pdfSourcesMap: Map<string, number[]> = new Map();
+    const urlSourcesSet: Set<string> = new Set();
+
     for (const doc of context) {
       const sourcePath = doc.metadata.source as string;
+      const sourceType = doc.metadata.type as string;
       const page = doc.metadata.page as number;
+      const title = doc.metadata.title as string;
 
-      if (sourcePath) {
-        // Extract only the filename from the full path for security
+      if (!sourcePath) continue;
+
+      // Check if this is a URL source
+      if (sourceType === 'html_url' || sourceType === 'pdf_url') {
+        // For URLs, create citation with title + URL
+        const citation = title ? `${title} - ${sourcePath}` : sourcePath;
+        urlSourcesSet.add(citation);
+      } else {
+        // For PDFs, extract only the filename from the full path for security
         // e.g., "/path/to/document.pdf" -> "document.pdf"
         const filename = sourcePath.split('/').pop() || sourcePath;
 
-        if (!sourcesMap.has(filename)) {
-          sourcesMap.set(filename, []);
+        if (!pdfSourcesMap.has(filename)) {
+          pdfSourcesMap.set(filename, []);
         }
-        if (typeof page === 'number' && !sourcesMap.get(filename)!.includes(page)) {
-          sourcesMap.get(filename)!.push(page);
+        if (typeof page === 'number' && !pdfSourcesMap.get(filename)!.includes(page)) {
+          pdfSourcesMap.get(filename)!.push(page);
         }
       }
     }
 
-    // Sort page numbers for each source and format with numbered prefix
-    const sources: Record<string, number[]> = {};
+    // Combine PDF and URL sources with numbered prefix
+    const sources: Record<string, number[] | string> = {};
     let index = 1;
-    for (const [filename, pages] of sourcesMap.entries()) {
+
+    // Add PDF sources (with page numbers)
+    for (const [filename, pages] of pdfSourcesMap.entries()) {
       pages.sort((a, b) => a - b);
       sources[`${index}. ${filename}`] = pages;
+      index++;
+    }
+
+    // Add URL sources (no page numbers, just citation string)
+    for (const citation of Array.from(urlSourcesSet)) {
+      sources[`${index}. ${citation}`] = [];
       index++;
     }
 

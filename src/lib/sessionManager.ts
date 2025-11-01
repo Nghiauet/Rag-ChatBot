@@ -35,7 +35,7 @@ export async function getVectordbInstance(): Promise<Collection | null> {
   console.log('🔄 Lazy-loading vector database...');
 
   try {
-    const { getVectorstore } = await import('./vectordb');
+    const { getVectorstore, getOrCreateEmptyCollection } = await import('./vectordb');
     const fs = await import('fs/promises');
 
     // Ensure docs folder exists
@@ -46,9 +46,12 @@ export async function getVectordbInstance(): Promise<Collection | null> {
     const pdfFiles = allFiles.filter((file) => file.toLowerCase().endsWith('.pdf'));
 
     if (pdfFiles.length === 0) {
-      console.warn('⚠️  No PDF documents found. Vector database cannot be initialized.');
+      console.log('ℹ️  No PDF documents found. Loading existing collection or creating empty one...');
+      // Load existing collection from ChromaDB Cloud or create empty one
+      vectordbInstance = await getOrCreateEmptyCollection();
+      console.log('✅ Vector database initialized successfully!');
       isInitializing = false;
-      return null;
+      return vectordbInstance;
     }
 
     console.log(`📚 Found ${pdfFiles.length} PDF documents`);
@@ -117,3 +120,8 @@ export function deleteSession(sessionId: string): void {
   activeSessions.delete(sessionId);
   clearChatHistory(sessionId);
 }
+
+/**
+ * Alias for getVectordbInstance for backward compatibility
+ */
+export const getVectorDB = getVectordbInstance;

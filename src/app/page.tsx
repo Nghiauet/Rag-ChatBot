@@ -4,10 +4,11 @@ import { useState } from 'react';
 import DocumentUpload from '@/components/DocumentUpload';
 import DocumentList from '@/components/DocumentList';
 import PromptManager from '@/components/PromptManager';
+import UrlManager from '@/components/UrlManager';
 import Login from '@/components/Login';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, MessageSquare, LogOut, Sun, Moon } from 'lucide-react';
+import { FileText, MessageSquare, LogOut, Sun, Moon, Link } from 'lucide-react';
 import { M3AppBar, M3Button, M3Tabs, M3Tab } from '@/components/ui/M3';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -15,7 +16,7 @@ export default function Home() {
   const { isAuthenticated, username, login, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState<'documents' | 'prompts'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'urls' | 'prompts'>('documents');
 
   const handleUploadSuccess = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -85,6 +86,11 @@ export default function Home() {
               <FileText className="w-4 h-4" /> Documents
             </span>
           </M3Tab>
+          <M3Tab selected={activeTab === 'urls'} onClick={() => setActiveTab('urls')}>
+            <span className="inline-flex items-center gap-2">
+              <Link className="w-4 h-4" /> Web Sources
+            </span>
+          </M3Tab>
           <M3Tab selected={activeTab === 'prompts'} onClick={() => setActiveTab('prompts')}>
             <span className="inline-flex items-center gap-2">
               <MessageSquare className="w-4 h-4" /> Prompts
@@ -121,6 +127,20 @@ export default function Home() {
                 </div>
                 <DocumentList refreshTrigger={refreshTrigger} />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'urls' && (
+            <div className="py-4">
+              <div className="mb-6">
+                <h2 className="text-xl font-medium mb-1">
+                  Web Sources
+                </h2>
+                <p className="text-sm opacity-70">
+                  Index and manage web content from URLs
+                </p>
+              </div>
+              <UrlManager />
             </div>
           )}
 

@@ -96,3 +96,97 @@ export const embeddingAPI = {
     return response.data;
   },
 };
+
+export interface UrlDocument {
+  id: string;
+  url: string;
+  title: string;
+  status: 'pending' | 'fetched' | 'indexed' | 'error';
+  contentType?: 'html' | 'pdf';
+  dateAdded: string;
+  lastFetched?: string;
+  lastIndexed?: string;
+  error?: string;
+}
+
+export interface UrlStatusResponse {
+  id: string;
+  url: string;
+  title: string;
+  status: 'pending' | 'fetched' | 'indexed' | 'error';
+  progress: string;
+  error?: string;
+  contentType?: 'html' | 'pdf';
+  lastFetched?: string;
+  lastIndexed?: string;
+}
+
+export interface UrlListResponse {
+  urls: UrlDocument[];
+}
+
+export interface AddUrlResponse {
+  message: string;
+  url: UrlDocument;
+}
+
+export interface BulkUrlResult {
+  url: string;
+  status: 'success' | 'error';
+  message: string;
+  document?: UrlDocument;
+}
+
+export interface AddBulkUrlsResponse {
+  message: string;
+  total: number;
+  successful: number;
+  failed: number;
+  results: BulkUrlResult[];
+}
+
+export const urlAPI = {
+  // Get list of URLs
+  getUrls: async (): Promise<UrlListResponse> => {
+    const response = await api.get('/api/urls');
+    return response.data;
+  },
+
+  // Add a URL (now returns immediately, processes in background)
+  addUrl: async (url: string): Promise<AddUrlResponse> => {
+    const response = await api.post('/api/urls', { url }, {
+      timeout: 10000, // 10 seconds - returns quickly now
+    });
+    return response.data;
+  },
+
+  // Get URL status (for polling)
+  getUrlStatus: async (id: string): Promise<UrlStatusResponse> => {
+    const response = await api.get(`/api/urls/${id}/status`, {
+      timeout: 5000, // 5 seconds for status check
+    });
+    return response.data;
+  },
+
+  // Delete a URL
+  deleteUrl: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/api/urls/${id}`);
+    return response.data;
+  },
+
+  // Refresh a URL
+  refreshUrl: async (id: string): Promise<AddUrlResponse> => {
+    const response = await api.post(`/api/urls/${id}/refresh`, {}, {
+      timeout: 60000, // 1 minute for URL fetching
+    });
+    return response.data;
+  },
+
+  // Add multiple URLs
+  addBulkUrls: async (urls: string[]): Promise<AddBulkUrlsResponse> => {
+    const response = await api.post('/api/urls', { urls }, {
+      timeout: 300000, // 5 minutes for bulk processing
+    });
+    return response.data;
+  },
+};
