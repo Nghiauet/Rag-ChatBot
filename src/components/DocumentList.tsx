@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { documentAPI, DocumentInfo, embeddingAPI } from '@/lib/api';
+import { documentAPI, DocumentInfo, embeddingAPI, urlAPI, UrlDocument } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileText, Download, Trash2, RefreshCw, Loader2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
@@ -12,6 +12,7 @@ interface DocumentListProps {
 
 export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [urls, setUrls] = useState<UrlDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
@@ -24,8 +25,12 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await documentAPI.getDocuments();
-      setDocuments(response.documents);
+      const [documentsResponse, urlsResponse] = await Promise.all([
+        documentAPI.getDocuments(),
+        urlAPI.getUrls()
+      ]);
+      setDocuments(documentsResponse.documents);
+      setUrls(urlsResponse.urls);
     } catch (error: any) {
       console.error('Failed to fetch documents:', error);
       toast.error('Failed to load documents');
@@ -113,7 +118,18 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     try {
       setRebuildingEmbeddings(true);
       const result = await embeddingAPI.rebuildEmbeddings();
-      toast.success(`${result.message}\nProcessed: ${result.documents_processed.join(', ')}`, {
+
+      // Build list of processed items
+      const processed = [];
+      if (result.pdfs_processed && result.pdfs_processed.length > 0) {
+        processed.push(`PDFs: ${result.pdfs_processed.join(', ')}`);
+      }
+      if (result.urls_processed && result.urls_processed.length > 0) {
+        processed.push(`URLs: ${result.urls_processed.join(', ')}`);
+      }
+
+      const processedMessage = processed.length > 0 ? `\nProcessed:\n${processed.join('\n')}` : '';
+      toast.success(`${result.message}${processedMessage}`, {
         duration: 5000,
       });
     } catch (error: any) {
@@ -123,7 +139,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
           duration: 8000,
         });
       } else {
-        toast.error(error.response?.data?.detail || 'Failed to rebuild embeddings');
+        toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to rebuild embeddings');
       }
     } finally {
       setRebuildingEmbeddings(false);
@@ -139,14 +155,14 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     );
   }
 
-  if (documents.length === 0) {
+  if (documents.length === 0 && urls.length === 0) {
     return (
       <div className="text-center py-16 px-4">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ background: 'var(--md-sys-color-surface-container-high)', color: 'color-mix(in oklab, var(--md-sys-color-on-surface) 70%, transparent)' }}>
           <FolderOpen className="w-8 h-8" />
         </div>
         <p className="text-lg font-medium mb-1">No documents yet</p>
-        <p className="text-sm opacity-70">Upload a PDF file to get started</p>
+        <p className="text-sm opacity-70">Upload a PDF file or add a URL to get started</p>
       </div>
     );
   }
@@ -165,10 +181,12 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
                 <h3 className="text-lg font-medium">
                   Documents
                 </h3>
-                <p className="text-sm opacity-70">{documents.length} files uploaded</p>
+                <p className="text-sm opacity-70">
+                  {documents.length} PDF{documents.length !== 1 ? 's' : ''}, {urls.length} URL{urls.length !== 1 ? 's' : ''}
+                </p>
               </div>
             </div>
-            <button onClick={handleRebuildEmbeddings} disabled={rebuildingEmbeddings || documents.length === 0} className="m3-btn m3-btn--filled">
+            <button onClick={handleRebuildEmbeddings} disabled={rebuildingEmbeddings || (documents.length === 0 && urls.length === 0)} className="m3-btn m3-btn--filled">
               {rebuildingEmbeddings ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />

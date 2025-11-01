@@ -88,7 +88,7 @@ export const promptAPI = {
 
 export const embeddingAPI = {
   // Rebuild embeddings for all documents
-  rebuildEmbeddings: async (): Promise<{ message: string; documents_processed: string[] }> => {
+  rebuildEmbeddings: async (): Promise<{ message: string; pdfs_processed: string[]; urls_processed: string[] }> => {
     // Use longer timeout for embedding rebuild (10 minutes)
     const response = await api.post('/api/documents/rebuild-embeddings', {}, {
       timeout: 600000, // 10 minutes for embedding operations
