@@ -178,25 +178,52 @@ Rag-ChatBot/
 
 ## 🐳 Docker Deployment
 
+### Quick Start with Docker (Recommended)
+
+**New to Docker or want a 5-minute setup?**
+
+**See [QUICKSTART_DOCKER.md](QUICKSTART_DOCKER.md) for a step-by-step guide!**
+
 ### Build and Run with Docker Compose
 
 ```bash
-# Build and start
-docker-compose up -d
+# Build and start the application
+docker-compose up -d --build
+
+# Initialize the vector database
+curl -X POST http://localhost:3003/api/documents/rebuild-embeddings
+
+# Access the application
+# Open http://localhost:3003 in your browser
 
 # View logs
 docker-compose logs -f
 
-# Stop
+# Restart the service
+docker-compose restart
+
+# Stop the application
 docker-compose down
 ```
+
+The application will be available at `http://localhost:3003`
 
 ### Build Docker Image Manually
 
 ```bash
 docker build -t women-health-assistant:latest .
-docker run -p 3000:3000 --env-file .env women-health-assistant:latest
+docker run -p 3003:3000 --env-file .env women-health-assistant:latest
 ```
+
+### Docker Configuration
+
+- **Port**: 3003 (external) → 3000 (internal)
+- **Image**: `women-health-assistant:nextjs-0.0.2`
+- **Health Check**: Automatic with 40s startup grace period
+- **Volumes**: `./data` mounted to `/app/data` for persistence
+- **Restart Policy**: `unless-stopped`
+
+For detailed Docker troubleshooting, see the [QUICKSTART_DOCKER.md](QUICKSTART_DOCKER.md) guide.
 
 ## 📝 Configuration
 

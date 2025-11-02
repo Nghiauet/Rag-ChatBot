@@ -88,7 +88,7 @@ export function M3Tab({
   children: React.ReactNode;
 }) {
   return (
-    <button className="m3-tab" aria-selected={selected} onClick={onClick}>
+    <button className="m3-tab" role="tab" aria-selected={selected} onClick={onClick}>
       {children}
     </button>
   );

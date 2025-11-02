@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import { DOCS_FOLDER } from '@/lib/config';
 import { getVectorstore } from '@/lib/vectordb';
@@ -8,7 +8,7 @@ import { setVectordbInstance } from '@/lib/sessionManager';
  * POST /api/init
  * Initialize the vector database on server startup or on demand
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   console.log('Initializing vector database...');
 
   try {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   const { getVectordbInstance } = await import('@/lib/sessionManager');
-  const vectordb = getVectordbInstance();
+  const vectordb = await getVectordbInstance();
 
   return NextResponse.json({
     initialized: vectordb !== null,

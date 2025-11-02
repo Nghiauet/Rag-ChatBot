@@ -324,7 +324,7 @@ export async function getOrCreateEmptyCollection(): Promise<Collection> {
     const count = await collection.count();
     console.log(`Loaded existing collection with ${count} documents`);
     return collection;
-  } catch (error) {
+  } catch {
     console.log('No existing collection found, creating empty one...');
   }
 

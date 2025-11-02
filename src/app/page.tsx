@@ -55,7 +55,7 @@ export default function Home() {
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-lg font-medium">Women's Health Assistant</h1>
+              <h1 className="text-lg font-medium">Women&apos;s Health Assistant</h1>
               <p className="text-xs opacity-70">Management Dashboard</p>
             </div>
           </div>

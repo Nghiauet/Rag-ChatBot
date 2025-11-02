@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';

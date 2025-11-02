@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { urlAPI, UrlDocument, BulkUrlResult } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Link as LinkIcon, Trash2, RefreshCw, Loader2, FolderOpen, Plus, CheckCircle, XCircle, Clock, List } from 'lucide-react';
+import { Link as LinkIcon, Trash2, RefreshCw, Loader2, FolderOpen, Plus, CheckCircle, XCircle, List } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 
 type AddMode = 'single' | 'bulk';
@@ -30,7 +30,7 @@ export default function UrlManager() {
       setLoading(true);
       const response = await urlAPI.getUrls();
       setUrls(response.urls);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch URLs:', error);
       toast.error('Failed to load URLs');
     } finally {
@@ -131,12 +131,13 @@ export default function UrlManager() {
       pollUrlStatus(urlId, newUrl).finally(() => {
         setAdding(false);
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Add URL error:', error);
-      if (error.response?.status === 409) {
+      const err = error as { response?: { status?: number; data?: { error?: string } } };
+      if (err.response?.status === 409) {
         toast.error('This URL has already been added');
       } else {
-        toast.error(error.response?.data?.error || 'Failed to add URL');
+        toast.error(err.response?.data?.error || 'Failed to add URL');
       }
       setAdding(false);
     }
@@ -186,9 +187,10 @@ export default function UrlManager() {
 
       setBulkUrls('');
       await fetchUrls();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Bulk add error:', error);
-      toast.error(error.response?.data?.error || 'Failed to add URLs');
+      const err = error as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Failed to add URLs');
     } finally {
       setAdding(false);
       setBulkProgress(null);
@@ -207,9 +209,10 @@ export default function UrlManager() {
       await urlAPI.deleteUrl(deleteDialog.url.id);
       toast.success('URL deleted successfully');
       await fetchUrls();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Delete error:', error);
-      toast.error(error.response?.data?.error || 'Failed to delete URL');
+      const err = error as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Failed to delete URL');
     } finally {
       setDeleting(null);
       setDeleteDialog({ isOpen: false, url: null });
@@ -222,12 +225,13 @@ export default function UrlManager() {
       const response = await urlAPI.refreshUrl(url.id);
       toast.success(`Successfully refreshed: ${response.url.title}`);
       await fetchUrls();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Refresh error:', error);
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      const err = error as { code?: string; message?: string; response?: { data?: { error?: string } } };
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         toast.error('Request timed out. The URL may be slow to respond.');
       } else {
-        toast.error(error.response?.data?.error || 'Failed to refresh URL');
+        toast.error(err.response?.data?.error || 'Failed to refresh URL');
       }
     } finally {
       setRefreshing(null);

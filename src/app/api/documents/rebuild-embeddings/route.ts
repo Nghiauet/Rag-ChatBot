@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';
@@ -37,7 +37,7 @@ async function writeUrls(urls: UrlDocument[]): Promise<void> {
  * POST /api/documents/rebuild-embeddings
  * Rebuild vector embeddings for ALL documents (PDFs + URLs)
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   console.log('Starting embeddings rebuild process for ALL documents...');
 
   try {
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         pdfs_processed: pdfFiles,
         urls_processed: fetchedUrls.map(u => u.url),
       });
-    } catch (embeddingError: any) {
+    } catch (embeddingError: unknown) {
       const errorMsg = String(embeddingError);
       console.error(`Embedding rebuild failed: ${errorMsg}`);
 

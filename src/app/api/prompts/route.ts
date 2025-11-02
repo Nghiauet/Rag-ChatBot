@@ -19,8 +19,8 @@ export async function GET() {
 
     const validatedPrompts = PromptConfigSchema.parse(prompts);
     return NextResponse.json(validatedPrompts);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       console.error('Prompts configuration file not found');
       return NextResponse.json(
         { error: 'Prompts configuration file not found' },

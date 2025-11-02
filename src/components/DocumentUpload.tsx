@@ -44,9 +44,10 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
       }, 500);
 
       onUploadSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Upload error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to upload document');
+      const err = error as { response?: { data?: { detail?: string } } };
+      toast.error(err.response?.data?.detail || 'Failed to upload document');
     } finally {
       setUploading(false);
     }

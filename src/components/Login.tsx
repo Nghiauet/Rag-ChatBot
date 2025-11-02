@@ -50,9 +50,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       } else {
         toast.error(data.error || 'Invalid username or password');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      if (error.name === 'AbortError') {
+      const err = error as { name?: string };
+      if (err.name === 'AbortError') {
         toast.error('Login request timed out. Please check your connection and try again.');
       } else {
         toast.error('Failed to login. Please try again.');
@@ -87,7 +88,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             <FileText className="w-8 h-8" strokeWidth={2} />
           </div>
           <h1 className="text-3xl font-normal mb-2">
-            Women's Health Assistant
+            Women&apos;s Health Assistant
           </h1>
           <p className="text-base opacity-70">Management Dashboard</p>
         </div>

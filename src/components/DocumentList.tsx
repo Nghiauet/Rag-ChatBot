@@ -31,7 +31,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       ]);
       setDocuments(documentsResponse.documents);
       setUrls(urlsResponse.urls);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch documents:', error);
       toast.error('Failed to load documents');
     } finally {
@@ -69,12 +69,13 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       }, 500);
 
       await fetchDocuments(); // Refresh the list
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Delete error:', error);
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      const err = error as { code?: string; message?: string; response?: { data?: { detail?: string } } };
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         toast.error('Request timed out. Please check your connection and try again.');
       } else {
-        toast.error(error.response?.data?.detail || 'Failed to delete document');
+        toast.error(err.response?.data?.detail || 'Failed to delete document');
       }
     } finally {
       setDeleting(null);
@@ -86,7 +87,7 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
     try {
       await documentAPI.downloadDocument(filename);
       toast.success(`Downloading "${filename}"`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Download error:', error);
       toast.error('Failed to download document');
     }
@@ -132,14 +133,15 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
       toast.success(`${result.message}${processedMessage}`, {
         duration: 5000,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Rebuild embeddings error:', error);
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      const err = error as { code?: string; message?: string; response?: { data?: { detail?: string; error?: string } } };
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         toast.error('Rebuild operation timed out. This may happen with many/large documents. Please try again or reduce document count.', {
           duration: 8000,
         });
       } else {
-        toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to rebuild embeddings');
+        toast.error(err.response?.data?.detail || err.response?.data?.error || 'Failed to rebuild embeddings');
       }
     } finally {
       setRebuildingEmbeddings(false);

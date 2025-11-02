@@ -39,9 +39,10 @@ export default function PromptManager() {
     try {
       await promptAPI.updatePrompts(prompts);
       toast.success('Prompts updated successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving prompts:', error);
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         toast.error('Request timed out. Please check your connection and try again.');
       } else {
         toast.error('Failed to save prompts');
@@ -274,7 +275,7 @@ export default function PromptManager() {
             <ul className="text-sm opacity-80 space-y-2">
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
-                <span>Be specific about the AI's role and expertise area</span>
+                <span>Be specific about the AI&apos;s role and expertise area</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-[var(--md-sys-color-primary)]">•</span>
