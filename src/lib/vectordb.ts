@@ -90,20 +90,38 @@ export async function getVectorstore(
   const collectionName = 'health_docs';
   let collection: Collection;
 
+  // Helper function for embedding generation with retry logic
+  const createEmbeddingFunction = () => ({
+    generate: async (texts: string[]) => {
+      const maxEmbedRetries = 3;
+      for (let attempt = 0; attempt < maxEmbedRetries; attempt++) {
+        try {
+          const embedResults = await Promise.all(
+            texts.map(text => embeddings.embedQuery(text))
+          );
+          return embedResults;
+        } catch (error) {
+          if (attempt < maxEmbedRetries - 1) {
+            const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.warn(`Embedding generation failed (attempt ${attempt + 1}/${maxEmbedRetries}), retrying in ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          } else {
+            console.error(`Embedding generation failed after ${maxEmbedRetries} attempts:`, error);
+            throw error;
+          }
+        }
+      }
+      throw new Error('Failed to generate embeddings');
+    }
+  });
+
   // Try to load existing collection if not rebuilding
   if (!rebuild) {
     console.log('Attempting to load existing collection from ChromaDB Cloud...');
     try {
       collection = await client.getCollection({
         name: collectionName,
-        embeddingFunction: {
-          generate: async (texts: string[]) => {
-            const embedResults = await Promise.all(
-              texts.map(text => embeddings.embedQuery(text))
-            );
-            return embedResults;
-          }
-        }
+        embeddingFunction: createEmbeddingFunction()
       });
       console.log('Successfully loaded existing vector database');
       return collection;
@@ -147,14 +165,7 @@ export async function getVectorstore(
       collection = await client.createCollection({
         name: collectionName,
         metadata: { description: 'Women\'s Health Documents Vector Store' },
-        embeddingFunction: {
-          generate: async (texts: string[]) => {
-            const embedResults = await Promise.all(
-              texts.map(text => embeddings.embedQuery(text))
-            );
-            return embedResults;
-          }
-        }
+        embeddingFunction: createEmbeddingFunction()
       });
 
       console.log(`Created collection '${collectionName}'`);
@@ -308,18 +319,36 @@ export async function getOrCreateEmptyCollection(): Promise<Collection> {
 
   const collectionName = 'health_docs';
 
-  // Try to load existing collection
-  try {
-    const collection = await client.getCollection({
-      name: collectionName,
-      embeddingFunction: {
-        generate: async (texts: string[]) => {
+  // Helper function for embedding generation with retry logic
+  const createEmbeddingFunction = () => ({
+    generate: async (texts: string[]) => {
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
           const embedResults = await Promise.all(
             texts.map(text => embeddings.embedQuery(text))
           );
           return embedResults;
+        } catch (error) {
+          if (attempt < maxRetries - 1) {
+            const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.warn(`Embedding generation failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          } else {
+            console.error(`Embedding generation failed after ${maxRetries} attempts:`, error);
+            throw error;
+          }
         }
       }
+      throw new Error('Failed to generate embeddings');
+    }
+  });
+
+  // Try to load existing collection
+  try {
+    const collection = await client.getCollection({
+      name: collectionName,
+      embeddingFunction: createEmbeddingFunction()
     });
     const count = await collection.count();
     console.log(`Loaded existing collection with ${count} documents`);
@@ -333,14 +362,7 @@ export async function getOrCreateEmptyCollection(): Promise<Collection> {
     const collection = await client.createCollection({
       name: collectionName,
       metadata: { description: 'Women\'s Health Documents Vector Store' },
-      embeddingFunction: {
-        generate: async (texts: string[]) => {
-          const embedResults = await Promise.all(
-            texts.map(text => embeddings.embedQuery(text))
-          );
-          return embedResults;
-        }
-      }
+      embeddingFunction: createEmbeddingFunction()
     });
 
     console.log(`Created empty collection '${collectionName}'`);
@@ -563,21 +585,62 @@ export async function rebuildAllEmbeddings(
     console.log('No existing collection to delete');
   }
 
-  // Create new collection with embedding function
+  // Create new collection with embedding function that has error handling
   const collection = await client.createCollection({
     name: collectionName,
     metadata: { description: 'Women\'s Health Documents Vector Store' },
     embeddingFunction: {
       generate: async (texts: string[]) => {
-        const embedResults = await Promise.all(
-          texts.map(text => embeddings.embedQuery(text))
-        );
-        return embedResults;
+        // Add retry logic for embedding generation
+        const maxRetries = 3;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const embedResults = await Promise.all(
+              texts.map(text => embeddings.embedQuery(text))
+            );
+            return embedResults;
+          } catch (error) {
+            if (attempt < maxRetries - 1) {
+              const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+              console.warn(`Embedding generation failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${waitTime}ms...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+              console.error(`Embedding generation failed after ${maxRetries} attempts:`, error);
+              throw error;
+            }
+          }
+        }
+        throw new Error('Failed to generate embeddings');
       }
     }
   });
 
   console.log(`Created collection '${collectionName}'`);
+
+  // Helper function to add batch with retry logic
+  const addBatchWithRetry = async (
+    batchData: { ids: string[]; documents: string[]; metadatas: Record<string, string | number | boolean>[] },
+    batchName: string,
+    maxRetries = 3
+  ): Promise<void> => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await collection.add(batchData);
+        return; // Success
+      } catch (error) {
+        const errorMsg = String(error);
+        if (attempt < maxRetries - 1) {
+          const waitTime = Math.pow(2, attempt) * 2000; // Exponential backoff: 2s, 4s, 8s
+          console.warn(`Failed to add ${batchName} (attempt ${attempt + 1}/${maxRetries}): ${errorMsg}`);
+          console.warn(`Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          console.error(`Failed to add ${batchName} after ${maxRetries} attempts: ${errorMsg}`);
+          throw new Error(`Failed to add ${batchName} after ${maxRetries} attempts: ${errorMsg}`);
+        }
+      }
+    }
+  };
 
   // Step 1: Process PDF documents
   if (pdfFiles.length > 0) {
@@ -619,13 +682,15 @@ export async function rebuildAllEmbeddings(
         return cleaned;
       });
 
-      await collection.add({
-        ids,
-        documents,
-        metadatas
-      });
+      // Add batch with retry logic
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(pdfChunks.length / batchSize);
+      await addBatchWithRetry(
+        { ids, documents, metadatas },
+        `PDF batch ${batchNumber}/${totalBatches}`
+      );
 
-      console.log(`Added PDF batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(pdfChunks.length / batchSize)}`);
+      console.log(`✓ Added PDF batch ${batchNumber}/${totalBatches}`);
 
       // Small delay between batches
       if (i + batchSize < pdfChunks.length) {
@@ -670,11 +735,13 @@ export async function rebuildAllEmbeddings(
           return cleaned;
         });
 
-        await collection.add({
-          ids,
-          documents,
-          metadatas
-        });
+        // Add batch with retry logic
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(urlDoc.fetchedDocuments.length / batchSize);
+        await addBatchWithRetry(
+          { ids, documents, metadatas },
+          `URL batch ${batchNumber}/${totalBatches} from ${urlDoc.url}`
+        );
 
         totalUrlChunks += batch.length;
 
@@ -684,7 +751,7 @@ export async function rebuildAllEmbeddings(
         }
       }
 
-      console.log(`Added ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}`);
+      console.log(`✓ Added ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}`);
     }
 
     console.log(`Successfully added ${totalUrlChunks} URL chunks from ${urlDocsToIndex.length} URLs`);
