@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { documentAPI, DocumentInfo, embeddingAPI, urlAPI, UrlDocument } from '@/lib/api';
+import { useEffect, useState, useRef } from 'react';
+import { documentAPI, DocumentInfo, embeddingAPI, urlAPI, UrlDocument, RebuildProgress } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileText, Download, Trash2, RefreshCw, Loader2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
@@ -16,11 +16,13 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
+  const [rebuildProgress, setRebuildProgress] = useState<RebuildProgress | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; filename: string | null }>({
     isOpen: false,
     filename: null
   });
   const [rebuildDialog, setRebuildDialog] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -42,6 +44,101 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   useEffect(() => {
     fetchDocuments();
   }, [refreshTrigger]);
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll rebuild status
+  const pollRebuildStatus = async (jobId: string) => {
+    const maxAttempts = 180; // 10 minutes with 3-second intervals (180 * 3s = 540s = 9min)
+    let attempts = 0;
+
+    const checkStatus = async () => {
+      try {
+        attempts++;
+        const status = await embeddingAPI.checkRebuildStatus(jobId);
+
+        console.log(`Rebuild status (attempt ${attempts}):`, status);
+
+        // Update progress
+        setRebuildProgress(status.progress);
+
+        if (status.status === 'completed') {
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+
+          setRebuildingEmbeddings(false);
+          setRebuildProgress(null);
+          setRebuildDialog(false);
+
+          toast.success('Embeddings rebuilt successfully!', {
+            duration: 5000,
+          });
+
+          // Refresh document list
+          await fetchDocuments();
+        } else if (status.status === 'error') {
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+
+          setRebuildingEmbeddings(false);
+          setRebuildProgress(null);
+          setRebuildDialog(false);
+
+          toast.error(`Rebuild failed: ${status.error || 'Unknown error'}`, {
+            duration: 8000,
+          });
+        } else if (attempts >= maxAttempts) {
+          // Timeout
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+
+          setRebuildingEmbeddings(false);
+          setRebuildProgress(null);
+          setRebuildDialog(false);
+
+          toast.error('Rebuild status check timed out. The process may still be running in the background.', {
+            duration: 8000,
+          });
+        }
+      } catch (error) {
+        console.error('Error polling rebuild status:', error);
+        // Continue polling on error (might be temporary network issue)
+        if (attempts >= maxAttempts) {
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+
+          setRebuildingEmbeddings(false);
+          setRebuildProgress(null);
+          setRebuildDialog(false);
+
+          toast.error('Failed to check rebuild status. Please refresh the page.', {
+            duration: 6000,
+          });
+        }
+      }
+    };
+
+    // Start polling
+    checkStatus(); // Check immediately
+    pollingIntervalRef.current = setInterval(checkStatus, 3000); // Then every 3 seconds
+  };
 
   const handleDelete = (filename: string) => {
     setDeleteDialog({ isOpen: true, filename });
@@ -118,34 +215,38 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
   const confirmRebuildEmbeddings = async () => {
     try {
       setRebuildingEmbeddings(true);
+      setRebuildProgress(null);
+
+      // Start rebuild (returns immediately with jobId)
       const result = await embeddingAPI.rebuildEmbeddings();
 
-      // Build list of processed items
-      const processed = [];
-      if (result.pdfs_processed && result.pdfs_processed.length > 0) {
-        processed.push(`PDFs: ${result.pdfs_processed.join(', ')}`);
-      }
-      if (result.urls_processed && result.urls_processed.length > 0) {
-        processed.push(`URLs: ${result.urls_processed.join(', ')}`);
-      }
+      console.log('Rebuild started:', result);
 
-      const processedMessage = processed.length > 0 ? `\nProcessed:\n${processed.join('\n')}` : '';
-      toast.success(`${result.message}${processedMessage}`, {
-        duration: 5000,
+      // Show initial progress
+      setRebuildProgress(result.progress);
+
+      // Show toast that rebuild started
+      toast.success('Rebuild started in background. Monitoring progress...', {
+        duration: 3000,
       });
+
+      // Start polling for status
+      await pollRebuildStatus(result.jobId);
     } catch (error: unknown) {
       console.error('Rebuild embeddings error:', error);
       const err = error as { code?: string; message?: string; response?: { data?: { detail?: string; error?: string } } };
+
+      setRebuildingEmbeddings(false);
+      setRebuildProgress(null);
+      setRebuildDialog(false);
+
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        toast.error('Rebuild operation timed out. This may happen with many/large documents. Please try again or reduce document count.', {
-          duration: 8000,
+        toast.error('Failed to start rebuild operation. Please try again.', {
+          duration: 6000,
         });
       } else {
-        toast.error(err.response?.data?.detail || err.response?.data?.error || 'Failed to rebuild embeddings');
+        toast.error(err.response?.data?.detail || err.response?.data?.error || 'Failed to start rebuild embeddings');
       }
-    } finally {
-      setRebuildingEmbeddings(false);
-      setRebuildDialog(false);
     }
   };
 
@@ -188,19 +289,28 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
                 </p>
               </div>
             </div>
-            <button onClick={handleRebuildEmbeddings} disabled={rebuildingEmbeddings || (documents.length === 0 && urls.length === 0)} className="m3-btn m3-btn--filled">
-              {rebuildingEmbeddings ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Rebuilding...</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Rebuild Embeddings</span>
-                </>
+            <div className="flex flex-col items-end gap-1">
+              <button onClick={handleRebuildEmbeddings} disabled={rebuildingEmbeddings || (documents.length === 0 && urls.length === 0)} className="m3-btn m3-btn--filled">
+                {rebuildingEmbeddings ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>
+                      {rebuildProgress ? `${rebuildProgress.percentage}%` : 'Rebuilding...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Rebuild Embeddings</span>
+                  </>
+                )}
+              </button>
+              {rebuildingEmbeddings && rebuildProgress && (
+                <p className="text-xs opacity-70">
+                  {rebuildProgress.currentStep}
+                </p>
               )}
-            </button>
+            </div>
           </div>
         </div>
 

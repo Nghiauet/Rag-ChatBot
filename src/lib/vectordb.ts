@@ -14,6 +14,104 @@ import {
 } from './config';
 
 /**
+ * Job tracking for rebuild embeddings process
+ */
+export type RebuildJobStatus = 'processing' | 'completed' | 'error';
+
+export interface RebuildJob {
+  jobId: string;
+  status: RebuildJobStatus;
+  progress: {
+    currentStep: string;
+    percentage: number;
+    totalPdfs: number;
+    totalUrls: number;
+    processedPdfs: number;
+    processedUrls: number;
+  };
+  error?: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
+// In-memory job tracking (for development; consider Redis for production)
+const rebuildJobs = new Map<string, RebuildJob>();
+
+/**
+ * Create a new rebuild job
+ */
+export function createRebuildJob(jobId: string, totalPdfs: number, totalUrls: number): RebuildJob {
+  const job: RebuildJob = {
+    jobId,
+    status: 'processing',
+    progress: {
+      currentStep: 'Initializing rebuild process',
+      percentage: 0,
+      totalPdfs,
+      totalUrls,
+      processedPdfs: 0,
+      processedUrls: 0,
+    },
+    startedAt: new Date(),
+  };
+  rebuildJobs.set(jobId, job);
+  return job;
+}
+
+/**
+ * Update rebuild job progress
+ */
+export function updateRebuildJob(
+  jobId: string,
+  updates: {
+    status?: RebuildJobStatus;
+    progress?: Partial<RebuildJob['progress']>;
+    error?: string;
+    completedAt?: Date;
+  }
+): void {
+  const job = rebuildJobs.get(jobId);
+  if (!job) {
+    console.warn(`Job ${jobId} not found`);
+    return;
+  }
+
+  if (updates.progress) {
+    job.progress = { ...job.progress, ...updates.progress };
+  }
+  if (updates.status) {
+    job.status = updates.status;
+  }
+  if (updates.error !== undefined) {
+    job.error = updates.error;
+  }
+  if (updates.completedAt) {
+    job.completedAt = updates.completedAt;
+  }
+
+  rebuildJobs.set(jobId, job);
+}
+
+/**
+ * Get rebuild job status
+ */
+export function getRebuildJob(jobId: string): RebuildJob | undefined {
+  return rebuildJobs.get(jobId);
+}
+
+/**
+ * Clean up old completed/errored jobs (older than 1 hour)
+ */
+export function cleanupOldJobs(): void {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  for (const [jobId, job] of rebuildJobs.entries()) {
+    if ((job.status === 'completed' || job.status === 'error') && job.completedAt && job.completedAt < oneHourAgo) {
+      rebuildJobs.delete(jobId);
+    }
+  }
+}
+
+/**
  * Extract text from PDF documents
  * @param pdfs - List of PDF filenames
  * @returns Promise<Document[]> - List of extracted documents
@@ -529,6 +627,7 @@ export async function getCollection(rebuild = false): Promise<Collection> {
  * This is the centralized function for creating all embeddings
  * @param pdfFiles - List of PDF filenames from disk
  * @param urlDocuments - List of URL documents with fetched content
+ * @param jobId - Optional job ID for progress tracking
  * @returns Promise<Collection> - The rebuilt collection
  */
 export async function rebuildAllEmbeddings(
@@ -541,127 +640,120 @@ export async function rebuildAllEmbeddings(
       pageContent: string;
       metadata: Record<string, string | number | boolean>;
     }>;
-  }>
+  }>,
+  jobId?: string
 ): Promise<Collection> {
-  console.log(`Rebuilding embeddings for ${pdfFiles.length} PDFs and ${urlDocuments.length} URLs`);
-
-  // Initialize ChromaDB Cloud client with validation
-  const client = await createChromaDBClient();
-
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    apiKey: GOOGLE_API_KEY,
-    modelName: EMBEDDING_MODEL,
-  });
-
-  const collectionName = 'health_docs';
-
-  // Delete existing collection for fresh rebuild
   try {
-    await client.deleteCollection({ name: collectionName });
-    console.log('Deleted existing collection for rebuild');
-  } catch {
-    console.log('No existing collection to delete');
-  }
+    console.log(`Rebuilding embeddings for ${pdfFiles.length} PDFs and ${urlDocuments.length} URLs`);
 
-  // Create new collection with embedding function
-  const collection = await client.createCollection({
-    name: collectionName,
-    metadata: { description: 'Women\'s Health Documents Vector Store' },
-    embeddingFunction: {
-      generate: async (texts: string[]) => {
-        const embedResults = await Promise.all(
-          texts.map(text => embeddings.embedQuery(text))
-        );
-        return embedResults;
-      }
-    }
-  });
-
-  console.log(`Created collection '${collectionName}'`);
-
-  // Step 1: Process PDF documents
-  if (pdfFiles.length > 0) {
-    console.log(`Processing ${pdfFiles.length} PDF files...`);
-    const pdfDocs = await extractPdfText(pdfFiles);
-    const pdfChunks = await getTextChunks(pdfDocs);
-
-    console.log(`Adding ${pdfChunks.length} PDF chunks to collection...`);
-
-    // Add PDF documents in batches
-    const batchSize = 10;
-    for (let i = 0; i < pdfChunks.length; i += batchSize) {
-      const batch = pdfChunks.slice(i, i + batchSize);
-      const ids = batch.map((_, idx) => `doc_${i + idx}`);
-      const documents = batch.map(doc => doc.pageContent);
-
-      // Clean metadata for PDFs
-      const metadatas = batch.map(doc => {
-        const cleaned: Record<string, string | number | boolean> = {};
-
-        if (doc.metadata.source && typeof doc.metadata.source === 'string') {
-          cleaned.source = doc.metadata.source;
+    // Update progress: Initializing
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        progress: {
+          currentStep: 'Initializing database connection',
+          percentage: 5,
         }
-
-        if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
-          cleaned.page = doc.metadata.loc.pageNumber as number;
-        }
-
-        for (const [key, value] of Object.entries(doc.metadata)) {
-          if (key === 'source' || key === 'loc' || key === 'pdf') {
-            continue;
-          }
-
-          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-            cleaned[key] = value;
-          }
-        }
-
-        return cleaned;
       });
-
-      await collection.add({
-        ids,
-        documents,
-        metadatas
-      });
-
-      console.log(`Added PDF batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(pdfChunks.length / batchSize)}`);
-
-      // Small delay between batches
-      if (i + batchSize < pdfChunks.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
     }
 
-    console.log(`Successfully added ${pdfChunks.length} PDF chunks`);
-  }
+    // Initialize ChromaDB Cloud client with validation
+    const client = await createChromaDBClient();
 
-  // Step 2: Process URL documents
-  const urlDocsToIndex = urlDocuments.filter(url => url.fetchedDocuments && url.fetchedDocuments.length > 0);
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      apiKey: GOOGLE_API_KEY,
+      modelName: EMBEDDING_MODEL,
+    });
 
-  if (urlDocsToIndex.length > 0) {
-    console.log(`Processing ${urlDocsToIndex.length} URL documents...`);
+    const collectionName = 'health_docs';
 
-    let totalUrlChunks = 0;
-    const batchSize = 10;
+    // Update progress: Deleting old collection
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        progress: {
+          currentStep: 'Deleting existing collection',
+          percentage: 10,
+        }
+      });
+    }
 
-    for (const urlDoc of urlDocsToIndex) {
-      if (!urlDoc.fetchedDocuments) continue;
+    // Delete existing collection for fresh rebuild
+    try {
+      await client.deleteCollection({ name: collectionName });
+      console.log('Deleted existing collection for rebuild');
+    } catch {
+      console.log('No existing collection to delete');
+    }
 
-      console.log(`Adding ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}...`);
+    // Update progress: Creating new collection
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        progress: {
+          currentStep: 'Creating new collection',
+          percentage: 15,
+        }
+      });
+    }
 
-      // Add URL documents in batches
-      for (let i = 0; i < urlDoc.fetchedDocuments.length; i += batchSize) {
-        const batch = urlDoc.fetchedDocuments.slice(i, i + batchSize);
-        const ids = batch.map((_, idx) => `url_${urlDoc.id}_${i + idx}`);
+    // Create new collection with embedding function
+    const collection = await client.createCollection({
+      name: collectionName,
+      metadata: { description: 'Women\'s Health Documents Vector Store' },
+      embeddingFunction: {
+        generate: async (texts: string[]) => {
+          const embedResults = await Promise.all(
+            texts.map(text => embeddings.embedQuery(text))
+          );
+          return embedResults;
+        }
+      }
+    });
+
+    console.log(`Created collection '${collectionName}'`);
+
+    // Step 1: Process PDF documents
+    if (pdfFiles.length > 0) {
+      console.log(`Processing ${pdfFiles.length} PDF files...`);
+
+      if (jobId) {
+        updateRebuildJob(jobId, {
+          progress: {
+            currentStep: `Extracting text from ${pdfFiles.length} PDF files`,
+            percentage: 20,
+          }
+        });
+      }
+
+      const pdfDocs = await extractPdfText(pdfFiles);
+      const pdfChunks = await getTextChunks(pdfDocs);
+
+      console.log(`Adding ${pdfChunks.length} PDF chunks to collection...`);
+
+      // Add PDF documents in batches
+      const batchSize = 10;
+      const totalBatches = Math.ceil(pdfChunks.length / batchSize);
+
+      for (let i = 0; i < pdfChunks.length; i += batchSize) {
+        const batch = pdfChunks.slice(i, i + batchSize);
+        const ids = batch.map((_, idx) => `doc_${i + idx}`);
         const documents = batch.map(doc => doc.pageContent);
 
-        // Clean metadata to only include primitive types
+        // Clean metadata for PDFs
         const metadatas = batch.map(doc => {
           const cleaned: Record<string, string | number | boolean> = {};
 
-          // Only include primitive types from metadata
+          if (doc.metadata.source && typeof doc.metadata.source === 'string') {
+            cleaned.source = doc.metadata.source;
+          }
+
+          if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
+            cleaned.page = doc.metadata.loc.pageNumber as number;
+          }
+
           for (const [key, value] of Object.entries(doc.metadata)) {
+            if (key === 'source' || key === 'loc' || key === 'pdf') {
+              continue;
+            }
+
             if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
               cleaned[key] = value;
             }
@@ -676,23 +768,145 @@ export async function rebuildAllEmbeddings(
           metadatas
         });
 
-        totalUrlChunks += batch.length;
+        const currentBatch = Math.floor(i / batchSize) + 1;
+        console.log(`Added PDF batch ${currentBatch}/${totalBatches}`);
+
+        // Update progress for PDF batches (20% to 60%)
+        if (jobId) {
+          const pdfProgress = 20 + Math.floor((currentBatch / totalBatches) * 40);
+          updateRebuildJob(jobId, {
+            progress: {
+              currentStep: `Processing PDFs: ${currentBatch}/${totalBatches} batches`,
+              percentage: pdfProgress,
+              processedPdfs: currentBatch,
+            }
+          });
+        }
 
         // Small delay between batches
-        if (i + batchSize < urlDoc.fetchedDocuments.length) {
+        if (i + batchSize < pdfChunks.length) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
-      console.log(`Added ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}`);
+      console.log(`Successfully added ${pdfChunks.length} PDF chunks`);
     }
 
-    console.log(`Successfully added ${totalUrlChunks} URL chunks from ${urlDocsToIndex.length} URLs`);
+    // Step 2: Process URL documents
+    const urlDocsToIndex = urlDocuments.filter(url => url.fetchedDocuments && url.fetchedDocuments.length > 0);
+
+    if (urlDocsToIndex.length > 0) {
+      console.log(`Processing ${urlDocsToIndex.length} URL documents...`);
+
+      if (jobId) {
+        updateRebuildJob(jobId, {
+          progress: {
+            currentStep: `Processing ${urlDocsToIndex.length} URL documents`,
+            percentage: 60,
+          }
+        });
+      }
+
+      let totalUrlChunks = 0;
+      const batchSize = 10;
+      let processedUrls = 0;
+
+      for (const urlDoc of urlDocsToIndex) {
+        if (!urlDoc.fetchedDocuments) continue;
+
+        console.log(`Adding ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}...`);
+
+        // Add URL documents in batches
+        for (let i = 0; i < urlDoc.fetchedDocuments.length; i += batchSize) {
+          const batch = urlDoc.fetchedDocuments.slice(i, i + batchSize);
+          const ids = batch.map((_, idx) => `url_${urlDoc.id}_${i + idx}`);
+          const documents = batch.map(doc => doc.pageContent);
+
+          // Clean metadata to only include primitive types
+          const metadatas = batch.map(doc => {
+            const cleaned: Record<string, string | number | boolean> = {};
+
+            // Only include primitive types from metadata
+            for (const [key, value] of Object.entries(doc.metadata)) {
+              if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                cleaned[key] = value;
+              }
+            }
+
+            return cleaned;
+          });
+
+          await collection.add({
+            ids,
+            documents,
+            metadatas
+          });
+
+          totalUrlChunks += batch.length;
+
+          // Small delay between batches
+          if (i + batchSize < urlDoc.fetchedDocuments.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        processedUrls++;
+        console.log(`Added ${urlDoc.fetchedDocuments.length} chunks from ${urlDoc.url}`);
+
+        // Update progress for URLs (60% to 90%)
+        if (jobId) {
+          const urlProgress = 60 + Math.floor((processedUrls / urlDocsToIndex.length) * 30);
+          updateRebuildJob(jobId, {
+            progress: {
+              currentStep: `Processing URLs: ${processedUrls}/${urlDocsToIndex.length}`,
+              percentage: urlProgress,
+              processedUrls,
+            }
+          });
+        }
+      }
+
+      console.log(`Successfully added ${totalUrlChunks} URL chunks from ${urlDocsToIndex.length} URLs`);
+    }
+
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        progress: {
+          currentStep: 'Finalizing embeddings',
+          percentage: 95,
+        }
+      });
+    }
+
+    const finalCount = await collection.count();
+    console.log(`✅ Successfully rebuilt embeddings! Total documents in collection: ${finalCount}`);
+
+    // Mark job as completed
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        status: 'completed',
+        progress: {
+          currentStep: 'Completed successfully',
+          percentage: 100,
+        },
+        completedAt: new Date(),
+      });
+    }
+
+    return collection;
+  } catch (error) {
+    console.error('Error during embedding rebuild:', error);
+
+    // Mark job as failed
+    if (jobId) {
+      updateRebuildJob(jobId, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        completedAt: new Date(),
+      });
+    }
+
+    throw error;
   }
-
-  const finalCount = await collection.count();
-  console.log(`✅ Successfully rebuilt embeddings! Total documents in collection: ${finalCount}`);
-
-  return collection;
 }
 

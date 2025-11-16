@@ -86,12 +86,44 @@ export const promptAPI = {
   },
 };
 
+export interface RebuildProgress {
+  currentStep: string;
+  percentage: number;
+  totalPdfs: number;
+  totalUrls: number;
+  processedPdfs: number;
+  processedUrls: number;
+}
+
+export interface RebuildJobResponse {
+  jobId: string;
+  status: 'processing' | 'completed' | 'error';
+  progress: RebuildProgress;
+  message: string;
+}
+
+export interface RebuildStatusResponse {
+  jobId: string;
+  status: 'processing' | 'completed' | 'error';
+  progress: RebuildProgress;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
 export const embeddingAPI = {
-  // Rebuild embeddings for all documents
-  rebuildEmbeddings: async (): Promise<{ message: string; pdfs_processed: string[]; urls_processed: string[] }> => {
-    // Use longer timeout for embedding rebuild (10 minutes)
+  // Start rebuild embeddings for all documents (returns immediately with jobId)
+  rebuildEmbeddings: async (): Promise<RebuildJobResponse> => {
     const response = await api.post('/api/documents/rebuild-embeddings', {}, {
-      timeout: 600000, // 10 minutes for embedding operations
+      timeout: 10000, // 10 seconds - returns immediately now
+    });
+    return response.data;
+  },
+
+  // Check rebuild status (for polling)
+  checkRebuildStatus: async (jobId: string): Promise<RebuildStatusResponse> => {
+    const response = await api.get(`/api/documents/rebuild-embeddings/status?jobId=${jobId}`, {
+      timeout: 5000, // 5 seconds for status check
     });
     return response.data;
   },

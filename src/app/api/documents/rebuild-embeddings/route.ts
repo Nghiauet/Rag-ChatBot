@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';
-import { rebuildAllEmbeddings } from '@/lib/vectordb';
+import { rebuildAllEmbeddings, createRebuildJob, cleanupOldJobs } from '@/lib/vectordb';
 import { setVectordbInstance } from '@/lib/sessionManager';
 import { UrlDocument } from '@/lib/types';
+import { randomUUID } from 'crypto';
 
 const URLS_FILE = path.join(process.cwd(), 'data', 'urls.json');
 
@@ -36,11 +37,15 @@ async function writeUrls(urls: UrlDocument[]): Promise<void> {
 /**
  * POST /api/documents/rebuild-embeddings
  * Rebuild vector embeddings for ALL documents (PDFs + URLs)
+ * Returns immediately with a jobId for status polling
  */
 export async function POST() {
   console.log('Starting embeddings rebuild process for ALL documents...');
 
   try {
+    // Clean up old jobs
+    cleanupOldJobs();
+
     // Get current PDF documents in docs folder
     const allFiles = await fs.readdir(DOCS_FOLDER);
     const pdfFiles = allFiles.filter((file) => file.toLowerCase().endsWith('.pdf'));
@@ -59,61 +64,63 @@ export async function POST() {
       );
     }
 
-    // Rebuild vector database with ALL documents (PDFs + URLs)
-    try {
-      console.log('Starting vector database rebuild with PDFs and URLs...');
-      const vectordb = await rebuildAllEmbeddings(pdfFiles, fetchedUrls);
+    // Generate unique job ID
+    const jobId = randomUUID();
+    console.log(`Created rebuild job with ID: ${jobId}`);
 
-      // Update URL statuses to 'indexed' for successfully embedded URLs
-      for (const urlDoc of urlDocuments) {
-        if (urlDoc.status === 'fetched' && urlDoc.fetchedDocuments && urlDoc.fetchedDocuments.length > 0) {
-          urlDoc.status = 'indexed';
-          urlDoc.lastIndexed = new Date().toISOString();
-        }
-      }
-      await writeUrls(urlDocuments);
+    // Create job tracking entry
+    const job = createRebuildJob(jobId, pdfFiles.length, fetchedUrls.length);
 
-      // Update the global instance with the rebuilt collection
-      setVectordbInstance(vectordb);
-      console.log(`Embeddings rebuilt successfully for ${pdfFiles.length} PDFs and ${fetchedUrls.length} URLs`);
+    // Start background processing (don't await)
+    processRebuildInBackground(jobId, pdfFiles, fetchedUrls, urlDocuments).catch(error => {
+      console.error(`Background rebuild failed for job ${jobId}:`, error);
+    });
 
-      return NextResponse.json({
-        message: `Embeddings rebuilt successfully for ${pdfFiles.length} PDFs and ${fetchedUrls.length} URLs`,
-        pdfs_processed: pdfFiles,
-        urls_processed: fetchedUrls.map(u => u.url),
-      });
-    } catch (embeddingError: unknown) {
-      const errorMsg = String(embeddingError);
-      console.error(`Embedding rebuild failed: ${errorMsg}`);
-
-      if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')) {
-        console.warn('API quota exceeded during rebuild');
-        return NextResponse.json(
-          {
-            error:
-              'API quota exceeded. Please check your Google API billing and quota limits, then try again later.',
-          },
-          { status: 429 }
-        );
-      } else if (errorMsg.toLowerCase().includes('rate')) {
-        console.warn('Rate limit exceeded during rebuild');
-        return NextResponse.json(
-          { error: 'Rate limit exceeded. Please wait a few minutes and try again.' },
-          { status: 429 }
-        );
-      } else {
-        console.error(`Unexpected error during rebuild: ${errorMsg}`);
-        return NextResponse.json(
-          { error: `Failed to create embeddings for all documents: ${errorMsg}` },
-          { status: 500 }
-        );
-      }
-    }
+    // Return immediately with job ID
+    return NextResponse.json({
+      jobId,
+      status: job.status,
+      progress: job.progress,
+      message: 'Rebuild started in background',
+    });
   } catch (error) {
-    console.error('General error during embeddings rebuild:', error);
+    console.error('Error starting embeddings rebuild:', error);
     return NextResponse.json(
-      { error: `Error rebuilding embeddings for all documents: ${error}` },
+      { error: `Error starting embeddings rebuild: ${error}` },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Background processing function
+ */
+async function processRebuildInBackground(
+  jobId: string,
+  pdfFiles: string[],
+  fetchedUrls: UrlDocument[],
+  urlDocuments: UrlDocument[]
+) {
+  try {
+    console.log(`Background processing started for job ${jobId}`);
+
+    // Rebuild vector database with ALL documents (PDFs + URLs)
+    const vectordb = await rebuildAllEmbeddings(pdfFiles, fetchedUrls, jobId);
+
+    // Update URL statuses to 'indexed' for successfully embedded URLs
+    for (const urlDoc of urlDocuments) {
+      if (urlDoc.status === 'fetched' && urlDoc.fetchedDocuments && urlDoc.fetchedDocuments.length > 0) {
+        urlDoc.status = 'indexed';
+        urlDoc.lastIndexed = new Date().toISOString();
+      }
+    }
+    await writeUrls(urlDocuments);
+
+    // Update the global instance with the rebuilt collection
+    setVectordbInstance(vectordb);
+    console.log(`Background rebuild completed for job ${jobId}`);
+  } catch (error) {
+    console.error(`Background rebuild failed for job ${jobId}:`, error);
+    // Error is already tracked in rebuildAllEmbeddings via updateRebuildJob
   }
 }

@@ -2,10 +2,11 @@ services:
   women-health-assistant-nextjs:
     build: .
     # image: women-health-assistant:nextjs-0.0.2
-    image: women-health-assistant:0.0.3
+    image: women-health-assistant:0.0.4
     container_name: women-health-assistant
     ports:
-      - "3003:3000"
+      # - "8300:3000"  # Commented out - not compatible with nginx setup
+      - "5000:3000"     # Changed to port 5000 for nginx proxy compatibility
     environment:
       - NODE_ENV=production
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -16,7 +17,7 @@ services:
       - CHROMADB_DATABASE=${CHROMADB_DATABASE}
       - LOG_LEVEL=${LOG_LEVEL}
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
