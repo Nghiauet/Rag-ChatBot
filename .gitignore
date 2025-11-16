@@ -79,6 +79,7 @@ data/users.json
 
 # Document backups
 data/docs_backup/
+data/prompts.yaml
 data/
 # Keep archived folder for reference (not ignored)
 # archived/
