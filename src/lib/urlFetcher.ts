@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
+import { CHUNK_SIZE, CHUNK_OVERLAP, CHUNK_SEPARATORS } from './config';
 
 // Create axios instance with cookie jar support
 const jar = new CookieJar();
@@ -185,11 +186,11 @@ async function fetchPdfFromUrl(url: string): Promise<UrlFetchResult> {
         });
       });
 
-      // Split into chunks
+      // Split into chunks using improved configuration
       const textSplitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 8000,
-        chunkOverlap: 800,
-        separators: ['\n\n', '\n', ' ', '']
+        chunkSize: CHUNK_SIZE,
+        chunkOverlap: CHUNK_OVERLAP,
+        separators: CHUNK_SEPARATORS
       });
 
       const chunks = await textSplitter.splitDocuments(documentsWithMetadata);
@@ -352,11 +353,11 @@ async function fetchHtmlFromUrl(url: string): Promise<UrlFetchResult> {
       ];
     }
 
-    // Split into chunks
+    // Split into chunks using improved configuration
     const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 8000,
-      chunkOverlap: 800,
-      separators: ['\n\n', '\n', ' ', '']
+      chunkSize: CHUNK_SIZE,
+      chunkOverlap: CHUNK_OVERLAP,
+      separators: CHUNK_SEPARATORS
     });
 
     const chunks = await textSplitter.splitDocuments(documents);

@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';
 import { UploadResponseSchema } from '@/lib/types';
+import { getOrCreateEmptyCollection, addPdfDocument } from '@/lib/vectordb';
 
 /**
  * POST /api/documents/upload
@@ -35,8 +36,29 @@ export async function POST(request: NextRequest) {
       await fs.writeFile(filePath, buffer);
       console.log(`File saved successfully: ${file.name}`);
 
+      // Auto-index the uploaded PDF
+      let chunksAdded = 0;
+      let indexingSuccess = true;
+      let indexingError = '';
+
+      try {
+        console.log(`Auto-indexing PDF: ${file.name}`);
+        const collection = await getOrCreateEmptyCollection();
+        chunksAdded = await addPdfDocument(collection, file.name);
+        console.log(`Successfully indexed ${file.name}: ${chunksAdded} chunks added`);
+      } catch (indexError) {
+        console.error(`Failed to auto-index ${file.name}:`, indexError);
+        indexingSuccess = false;
+        indexingError = indexError instanceof Error ? indexError.message : 'Unknown error';
+        // Don't fail the upload if indexing fails - file is already saved
+      }
+
+      const message = indexingSuccess
+        ? `Document ${file.name} uploaded and indexed successfully! Added ${chunksAdded} chunks to the knowledge base.`
+        : `Document ${file.name} uploaded successfully, but auto-indexing failed: ${indexingError}. Please rebuild embeddings manually.`;
+
       const response = UploadResponseSchema.parse({
-        message: `Document ${file.name} uploaded successfully. Please rebuild embeddings to include this document in the knowledge base.`,
+        message,
         filename: file.name,
       });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';
+import { getOrCreateEmptyCollection, removePdfDocument } from '@/lib/vectordb';
 
 /**
  * DELETE /api/documents/[filename]
@@ -22,12 +23,32 @@ export async function DELETE(
     }
 
     try {
+      // First, remove embeddings from vector database
+      let chunksRemoved = 0;
+      let embeddingRemovalSuccess = true;
+      let embeddingError = '';
+
+      try {
+        console.log(`Removing embeddings for: ${filename}`);
+        const collection = await getOrCreateEmptyCollection();
+        chunksRemoved = await removePdfDocument(collection, filename);
+        console.log(`Successfully removed ${chunksRemoved} chunks for ${filename}`);
+      } catch (removeError) {
+        console.error(`Failed to remove embeddings for ${filename}:`, removeError);
+        embeddingRemovalSuccess = false;
+        embeddingError = removeError instanceof Error ? removeError.message : 'Unknown error';
+        // Continue to delete the file even if embedding removal fails
+      }
+
+      // Delete the physical file
       await fs.unlink(filePath);
       console.log(`Document ${filename} deleted successfully`);
 
-      return NextResponse.json({
-        message: `Document ${filename} deleted successfully. Please rebuild embeddings to update the knowledge base.`,
-      });
+      const message = embeddingRemovalSuccess
+        ? `Document ${filename} deleted successfully! Removed ${chunksRemoved} chunks from the knowledge base.`
+        : `Document ${filename} file deleted, but failed to remove embeddings: ${embeddingError}. Consider rebuilding embeddings.`;
+
+      return NextResponse.json({ message });
     } catch (error) {
       console.error(`Failed to delete file ${filename}:`, error);
       return NextResponse.json(

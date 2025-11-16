@@ -10,7 +10,10 @@ import {
   EMBEDDING_MODEL,
   CHROMADB_API_KEY,
   CHROMADB_TENANT,
-  CHROMADB_DATABASE
+  CHROMADB_DATABASE,
+  CHUNK_SIZE,
+  CHUNK_OVERLAP,
+  CHUNK_SEPARATORS
 } from './config';
 
 /**
@@ -140,22 +143,42 @@ async function extractPdfText(pdfs: string[]): Promise<Document[]> {
 }
 
 /**
- * Split text into chunks
+ * Split text into chunks with improved semantic boundaries
  * @param docs - List of text documents
- * @returns Promise<Document[]> - List of text chunks
+ * @param filename - Optional filename for enhanced metadata
+ * @returns Promise<Document[]> - List of text chunks with enhanced metadata
  */
-async function getTextChunks(docs: Document[]): Promise<Document[]> {
+async function getTextChunks(docs: Document[], filename?: string): Promise<Document[]> {
   console.log(`Starting text chunking for ${docs.length} documents`);
 
-  // Chunk size is configured to be an approximation to the model limit of 2048 tokens
+  // Use configurable chunk size for better semantic coherence
+  // Default: 1500 characters with 200 character overlap (~13% overlap)
+  // This is smaller than the previous 8000 to maintain better semantic boundaries
   const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 8000,
-    chunkOverlap: 800,
-    separators: ['\n\n', '\n', ' ', ''],
+    chunkSize: CHUNK_SIZE,
+    chunkOverlap: CHUNK_OVERLAP,
+    separators: CHUNK_SEPARATORS,
   });
 
   const chunks = await textSplitter.splitDocuments(docs);
+
+  // Enhance chunks with additional metadata
+  chunks.forEach((chunk, index) => {
+    chunk.metadata = {
+      ...chunk.metadata,
+      chunkIndex: index,
+      totalChunks: chunks.length,
+      chunkSize: chunk.pageContent.length,
+    };
+
+    // Add filename to metadata if provided
+    if (filename) {
+      chunk.metadata.filename = filename;
+    }
+  });
+
   console.log(`Text chunking completed. Created ${chunks.length} chunks from ${docs.length} documents`);
+  console.log(`Chunk configuration: size=${CHUNK_SIZE}, overlap=${CHUNK_OVERLAP}`);
 
   return chunks;
 }
@@ -609,6 +632,189 @@ export async function removeUrlDocuments(
 }
 
 /**
+ * Remove all documents associated with a specific PDF filename
+ * @param collection - ChromaDB collection
+ * @param filename - PDF filename (e.g., "document.pdf")
+ * @returns Promise<number> - Number of documents removed
+ */
+export async function removePdfDocument(
+  collection: Collection,
+  filename: string
+): Promise<number> {
+  console.log(`Removing documents for PDF: ${filename}`);
+
+  try {
+    // Extract just the filename without path for matching
+    const baseFilename = path.basename(filename);
+
+    // Query all documents with this filename in metadata
+    // We need to search by filename metadata field
+    const results = await collection.get({
+      where: { filename: baseFilename }
+    });
+
+    if (!results.ids || results.ids.length === 0) {
+      console.log(`No documents found for PDF: ${filename}`);
+      return 0;
+    }
+
+    // Delete all matching documents
+    await collection.delete({
+      ids: results.ids
+    });
+
+    console.log(`Successfully removed ${results.ids.length} documents for PDF: ${filename}`);
+    return results.ids.length;
+  } catch (error) {
+    console.error(`Error removing PDF documents:`, error);
+    throw new Error(`Failed to remove PDF documents: ${error}`);
+  }
+}
+
+/**
+ * Add a single PDF document to existing collection with incremental indexing
+ * @param collection - ChromaDB collection
+ * @param filename - PDF filename (e.g., "document.pdf")
+ * @param maxRetries - Maximum number of retries for transient failures
+ * @returns Promise<number> - Number of chunks added
+ */
+export async function addPdfDocument(
+  collection: Collection,
+  filename: string,
+  maxRetries = 3
+): Promise<number> {
+  console.log(`Adding PDF document: ${filename}`);
+
+  const batchSize = 10;
+  const baseFilename = path.basename(filename);
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Extract text from the single PDF
+      const pdfPath = path.join(DOCS_FOLDER, baseFilename);
+      console.log(`Extracting text from: ${pdfPath}`);
+
+      const loader = new PDFLoader(pdfPath);
+      const docs = await loader.load();
+      console.log(`Successfully extracted ${docs.length} pages from ${baseFilename}`);
+
+      // Chunk the documents with filename in metadata
+      const chunks = await getTextChunks(docs, baseFilename);
+      console.log(`Created ${chunks.length} chunks from ${baseFilename}`);
+
+      // Add chunks to collection in batches
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+
+        // Use filename-based IDs: pdf_{filename}_{chunkIndex}
+        const sanitizedFilename = baseFilename.replace(/[^a-zA-Z0-9]/g, '_');
+        const ids = batch.map((_, idx) => `pdf_${sanitizedFilename}_${i + idx}`);
+        const documents = batch.map(doc => doc.pageContent);
+
+        // Clean metadata for ChromaDB
+        const metadatas = batch.map(doc => {
+          const cleaned: Record<string, string | number | boolean> = {};
+
+          // Add filename for tracking
+          cleaned.filename = baseFilename;
+
+          // Add source path
+          if (doc.metadata.source && typeof doc.metadata.source === 'string') {
+            cleaned.source = doc.metadata.source;
+          }
+
+          // Extract page number
+          if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
+            cleaned.page = doc.metadata.loc.pageNumber as number;
+          }
+
+          // Add chunk metadata
+          if (doc.metadata.chunkIndex !== undefined) {
+            cleaned.chunkIndex = doc.metadata.chunkIndex as number;
+          }
+          if (doc.metadata.totalChunks !== undefined) {
+            cleaned.totalChunks = doc.metadata.totalChunks as number;
+          }
+          if (doc.metadata.chunkSize !== undefined) {
+            cleaned.chunkSize = doc.metadata.chunkSize as number;
+          }
+
+          // Handle other primitive metadata fields
+          for (const [key, value] of Object.entries(doc.metadata)) {
+            if (key === 'source' || key === 'loc' || key === 'pdf' || key === 'filename' ||
+                key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
+              continue;
+            }
+
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+              cleaned[key] = value;
+            }
+          }
+
+          return cleaned;
+        });
+
+        // Retry individual batch operations
+        let batchSuccess = false;
+        for (let batchAttempt = 0; batchAttempt < 3; batchAttempt++) {
+          try {
+            await collection.add({
+              ids,
+              documents,
+              metadatas
+            });
+            batchSuccess = true;
+            break;
+          } catch (batchError) {
+            if (batchAttempt < 2) {
+              console.warn(`Batch ${Math.floor(i / batchSize) + 1} failed, retrying... (${batchAttempt + 1}/3)`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * (batchAttempt + 1)));
+            } else {
+              throw batchError;
+            }
+          }
+        }
+
+        if (!batchSuccess) {
+          throw new Error(`Failed to add batch ${Math.floor(i / batchSize) + 1} after 3 attempts`);
+        }
+
+        console.log(`Added PDF batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)}`);
+
+        // Small delay between batches
+        if (i + batchSize < chunks.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      const finalCount = await collection.count();
+      console.log(`Successfully added ${chunks.length} chunks from ${baseFilename}. Total collection size: ${finalCount}`);
+      return chunks.length;
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries - 1;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      if (isLastAttempt) {
+        console.error(`Error adding PDF document after ${maxRetries} attempts:`, error);
+        throw new Error(
+          `Failed to add PDF document after ${maxRetries} attempts. ` +
+          `Original error: ${errorMessage}`
+        );
+      } else {
+        const retryDelay = 2000 * Math.pow(2, attempt); // Exponential backoff
+        console.warn(
+          `Attempt ${attempt + 1}/${maxRetries} failed: ${errorMessage}. ` +
+          `Retrying in ${retryDelay / 1000} seconds...`
+        );
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+  }
+
+  throw new Error('Failed to add PDF document');
+}
+
+/**
  * Get collection instance (for use in API routes)
  * @param rebuild - If true, rebuild the entire collection from PDFs and URLs
  * @returns Promise<Collection>
@@ -723,73 +929,106 @@ export async function rebuildAllEmbeddings(
         });
       }
 
-      const pdfDocs = await extractPdfText(pdfFiles);
-      const pdfChunks = await getTextChunks(pdfDocs);
-
-      console.log(`Adding ${pdfChunks.length} PDF chunks to collection...`);
-
-      // Add PDF documents in batches
+      // Process each PDF file separately to maintain filename in metadata
+      let totalPdfChunksAdded = 0;
       const batchSize = 10;
-      const totalBatches = Math.ceil(pdfChunks.length / batchSize);
 
-      for (let i = 0; i < pdfChunks.length; i += batchSize) {
-        const batch = pdfChunks.slice(i, i + batchSize);
-        const ids = batch.map((_, idx) => `doc_${i + idx}`);
-        const documents = batch.map(doc => doc.pageContent);
+      for (let pdfIdx = 0; pdfIdx < pdfFiles.length; pdfIdx++) {
+        const pdfFile = pdfFiles[pdfIdx];
+        const baseFilename = path.basename(pdfFile);
+        console.log(`Processing PDF ${pdfIdx + 1}/${pdfFiles.length}: ${baseFilename}`);
 
-        // Clean metadata for PDFs
-        const metadatas = batch.map(doc => {
-          const cleaned: Record<string, string | number | boolean> = {};
+        // Extract text from this PDF
+        const pdfPath = path.join(DOCS_FOLDER, pdfFile);
+        const loader = new PDFLoader(pdfPath);
+        const docs = await loader.load();
 
-          if (doc.metadata.source && typeof doc.metadata.source === 'string') {
-            cleaned.source = doc.metadata.source;
-          }
+        // Chunk with filename in metadata
+        const chunks = await getTextChunks(docs, baseFilename);
+        console.log(`Created ${chunks.length} chunks from ${baseFilename}`);
 
-          if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
-            cleaned.page = doc.metadata.loc.pageNumber as number;
-          }
+        // Add chunks to collection in batches
+        const totalBatches = Math.ceil(chunks.length / batchSize);
 
-          for (const [key, value] of Object.entries(doc.metadata)) {
-            if (key === 'source' || key === 'loc' || key === 'pdf') {
-              continue;
+        for (let i = 0; i < chunks.length; i += batchSize) {
+          const batch = chunks.slice(i, i + batchSize);
+
+          // Use filename-based IDs: pdf_{filename}_{chunkIndex}
+          const sanitizedFilename = baseFilename.replace(/[^a-zA-Z0-9]/g, '_');
+          const ids = batch.map((_, idx) => `pdf_${sanitizedFilename}_${i + idx}`);
+          const documents = batch.map(doc => doc.pageContent);
+
+          // Clean metadata for PDFs
+          const metadatas = batch.map(doc => {
+            const cleaned: Record<string, string | number | boolean> = {};
+
+            // Add filename for tracking
+            cleaned.filename = baseFilename;
+
+            if (doc.metadata.source && typeof doc.metadata.source === 'string') {
+              cleaned.source = doc.metadata.source;
             }
 
-            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-              cleaned[key] = value;
+            if (doc.metadata.loc && typeof doc.metadata.loc === 'object' && 'pageNumber' in doc.metadata.loc) {
+              cleaned.page = doc.metadata.loc.pageNumber as number;
             }
+
+            // Add chunk metadata
+            if (doc.metadata.chunkIndex !== undefined) {
+              cleaned.chunkIndex = doc.metadata.chunkIndex as number;
+            }
+            if (doc.metadata.totalChunks !== undefined) {
+              cleaned.totalChunks = doc.metadata.totalChunks as number;
+            }
+            if (doc.metadata.chunkSize !== undefined) {
+              cleaned.chunkSize = doc.metadata.chunkSize as number;
+            }
+
+            for (const [key, value] of Object.entries(doc.metadata)) {
+              if (key === 'source' || key === 'loc' || key === 'pdf' || key === 'filename' ||
+                  key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
+                continue;
+              }
+
+              if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                cleaned[key] = value;
+              }
+            }
+
+            return cleaned;
+          });
+
+          await collection.add({
+            ids,
+            documents,
+            metadatas
+          });
+
+          const currentBatch = Math.floor(i / batchSize) + 1;
+          console.log(`  Added batch ${currentBatch}/${totalBatches} for ${baseFilename}`);
+
+          totalPdfChunksAdded += batch.length;
+
+          // Small delay between batches
+          if (i + batchSize < chunks.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
+        }
 
-          return cleaned;
-        });
-
-        await collection.add({
-          ids,
-          documents,
-          metadatas
-        });
-
-        const currentBatch = Math.floor(i / batchSize) + 1;
-        console.log(`Added PDF batch ${currentBatch}/${totalBatches}`);
-
-        // Update progress for PDF batches (20% to 60%)
+        // Update progress for each PDF (20% to 60%)
         if (jobId) {
-          const pdfProgress = 20 + Math.floor((currentBatch / totalBatches) * 40);
+          const pdfProgress = 20 + Math.floor(((pdfIdx + 1) / pdfFiles.length) * 40);
           updateRebuildJob(jobId, {
             progress: {
-              currentStep: `Processing PDFs: ${currentBatch}/${totalBatches} batches`,
+              currentStep: `Processing PDFs: ${pdfIdx + 1}/${pdfFiles.length} files`,
               percentage: pdfProgress,
-              processedPdfs: currentBatch,
+              processedPdfs: pdfIdx + 1,
             }
           });
         }
-
-        // Small delay between batches
-        if (i + batchSize < pdfChunks.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
       }
 
-      console.log(`Successfully added ${pdfChunks.length} PDF chunks`);
+      console.log(`Successfully added ${totalPdfChunksAdded} PDF chunks from ${pdfFiles.length} files`);
     }
 
     // Step 2: Process URL documents

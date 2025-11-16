@@ -18,3 +18,22 @@ export const CHROMADB_DATABASE = process.env.CHROMADB_DATABASE || '';
 
 // Logging configuration
 export const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+
+// Chunking configuration
+export const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || '1500', 10);
+export const CHUNK_OVERLAP = parseInt(process.env.CHUNK_OVERLAP || '200', 10);
+
+// Improved separators for better semantic chunking
+// These separators preserve document structure and semantic boundaries
+export const CHUNK_SEPARATORS = [
+  '\n\n\n',  // Multiple blank lines (section breaks)
+  '\n\n',    // Paragraph breaks
+  '\n',      // Line breaks
+  '. ',      // Sentence endings
+  '! ',      // Sentence endings
+  '? ',      // Sentence endings
+  '; ',      // Clause separators
+  ', ',      // Phrase separators
+  ' ',       // Word boundaries
+  '',        // Character level (fallback)
+];
