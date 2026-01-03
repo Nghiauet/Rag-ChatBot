@@ -387,9 +387,9 @@ async function createChromaDBClient(): Promise<CloudClient> {
       database: CHROMADB_DATABASE
     });
 
-    // Test the connection by trying to list collections
+    // Test the connection without requiring embedding function config
     try {
-      await client.listCollections();
+      await client.countCollections();
       console.log('✅ Successfully connected to ChromaDB Cloud!');
     } catch (error) {
       console.error('❌ Failed to connect to ChromaDB Cloud:', error);
@@ -1148,4 +1148,3 @@ export async function rebuildAllEmbeddings(
     throw error;
   }
 }
-

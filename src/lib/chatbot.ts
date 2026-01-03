@@ -1,11 +1,11 @@
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage, HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { Collection } from 'chromadb';
 import * as fs from 'fs/promises';
 import * as yaml from 'js-yaml';
-import { PROMPTS_FILE, GOOGLE_API_KEY, MODEL, EMBEDDING_MODEL } from './config';
+import { PROMPTS_FILE, GOOGLE_API_KEY, MODEL, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL } from './config';
 import { PromptConfig, ChatMessage } from './types';
 
 // Cache prompts to avoid reading file on every request
@@ -126,10 +126,13 @@ async function getResponse(
   const systemPromptTemplate = `${promptsConfig.system_prompt}\n\n${promptsConfig.context_instruction}\n\nContext from documents:\n####\n${contextText}`;
   console.log(`Using dynamic system prompt from ${PROMPTS_FILE}`);
 
-  const llm = new ChatGoogleGenerativeAI({
-    apiKey: GOOGLE_API_KEY,
+  const llm = new ChatOpenAI({
+    apiKey: OPENAI_API_KEY,
     model: MODEL,
     temperature: 0.2,
+    configuration: {
+      baseURL: OPENAI_BASE_URL,
+    },
   });
 
   const prompt = ChatPromptTemplate.fromMessages([

@@ -1,12 +1,11 @@
 services:
   women-health-assistant-nextjs:
     build: .
-    # image: women-health-assistant:nextjs-0.0.2
     image: women-health-assistant:0.0.4
     container_name: women-health-assistant
     ports:
-      # - "8300:3000"  # Commented out - not compatible with nginx setup
-      - "5000:3000"     # Changed to port 5000 for nginx proxy compatibility
+      - "8300:3000"  # Commented out - not compatible with nginx setup
+      # - "5000:3000"     # Changed to port 5000 for nginx proxy compatibility
     environment:
       - NODE_ENV=production
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
