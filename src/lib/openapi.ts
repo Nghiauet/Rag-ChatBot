@@ -16,13 +16,13 @@ export const openApiSpec: OpenAPIV3.Document = {
       description: 'API Server',
     },
   ],
+  security: [{ BasicAuth: [] }],
   components: {
     securitySchemes: {
-      BearerAuth: {
+      BasicAuth: {
         type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'JWT token from /auth/login endpoint',
+        scheme: 'basic',
+        description: 'Basic authentication (typically enforced by a reverse proxy)',
       },
     },
     schemas: {
@@ -310,7 +310,8 @@ export const openApiSpec: OpenAPIV3.Document = {
       post: {
         tags: ['Authentication'],
         summary: 'User login',
-        description: 'Authenticate user and receive JWT tokens',
+        description: 'Authenticate user',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -350,7 +351,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Chat & RAG'],
         summary: 'Ask a question',
         description: 'Submit a question to the RAG system and receive an AI-generated answer with citations',
-        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -398,7 +398,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Chat & RAG'],
         summary: 'Get chat history',
         description: 'Retrieve chat history for a specific session',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'sessionId',
@@ -431,7 +430,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Chat & RAG'],
         summary: 'Clear chat history',
         description: 'Delete chat history for a specific session',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'sessionId',
@@ -465,7 +463,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'List documents',
         description: 'Retrieve list of all uploaded PDF documents',
-        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Documents retrieved successfully',
@@ -483,7 +480,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'Upload document',
         description: 'Upload a PDF document for indexing',
-        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -526,7 +522,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'Delete document',
         description: 'Delete a document by filename',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'filename',
@@ -566,7 +561,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'Download document',
         description: 'Download a document by filename',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'filename',
@@ -604,7 +598,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'Rebuild embeddings',
         description: 'Rebuild vector database embeddings for all documents',
-        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Rebuild started',
@@ -620,7 +613,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Document Management'],
         summary: 'Get rebuild status',
         description: 'Check the status of embeddings rebuild process',
-        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Rebuild status',
@@ -640,7 +632,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'List URLs',
         description: 'Retrieve list of all indexed URLs',
-        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'URLs retrieved successfully',
@@ -656,7 +647,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'Add URL(s)',
         description: 'Add one or multiple URLs to fetch and index. Supports both single URL and bulk operations.',
-        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -717,7 +707,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'Get URL details',
         description: 'Retrieve details for a specific URL document',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'id',
@@ -750,7 +739,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'Delete URL',
         description: 'Delete a URL document by ID',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'id',
@@ -790,7 +778,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'Refresh URL content',
         description: 'Re-fetch and re-index content from a URL',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'id',
@@ -825,7 +812,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['URL Management'],
         summary: 'Get URL status',
         description: 'Get processing status of a URL document',
-        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: 'id',
@@ -872,7 +858,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Configuration'],
         summary: 'Get prompt configuration',
         description: 'Retrieve current prompt configuration',
-        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Prompt configuration retrieved',
@@ -888,7 +873,6 @@ export const openApiSpec: OpenAPIV3.Document = {
         tags: ['Configuration'],
         summary: 'Update prompt configuration',
         description: 'Update prompt configuration settings',
-        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {

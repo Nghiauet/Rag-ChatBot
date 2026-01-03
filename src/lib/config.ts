@@ -13,6 +13,8 @@ export const OPENAI_BASE_URL =
   process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
 export const MODEL = process.env.MODEL || 'models/gemini-flash-latest';
 export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'models/embedding-001';
+export const BASIC_AUTH_USERNAME = process.env.BASIC_AUTH_USERNAME || '';
+export const BASIC_AUTH_PASSWORD = process.env.BASIC_AUTH_PASSWORD || '';
 
 // ChromaDB Cloud Configuration
 export const CHROMADB_API_KEY = process.env.CHROMADB_API_KEY || '';
