@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash } from 'crypto';
-import * as fs from 'fs/promises';
-import path from 'path';
+import { BASIC_AUTH_USERNAME, BASIC_AUTH_PASSWORD } from '@/lib/config';
 
-interface User {
-  username: string;
-  password: string;
-  name: string;
-}
-
-interface UsersConfig {
-  users: User[];
-}
-// to create new user: echo -n "CoWP@2025" | sha256sum
 export async function POST(request: NextRequest) {
   try {
+    if (!BASIC_AUTH_USERNAME || !BASIC_AUTH_PASSWORD) {
+      return NextResponse.json(
+        { error: 'Admin credentials are not configured on the server.' },
+        { status: 500 }
+      );
+    }
+
     // Be resilient to different content types or empty bodies
     let username = '';
     let password = '';
@@ -53,20 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read users from config file (async to avoid blocking)
-    const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
-    const usersData = await fs.readFile(usersFilePath, 'utf-8');
-    const config: UsersConfig = JSON.parse(usersData);
-
-    // Hash the input password with SHA-256
-    const hashedPassword = createHash('sha256').update(password).digest('hex');
-
-    // Find user with matching username and password
-    const user = config.users.find(
-      (u) => u.username === username && u.password === hashedPassword
-    );
-
-    if (!user) {
+    if (username !== BASIC_AUTH_USERNAME || password !== BASIC_AUTH_PASSWORD) {
       return NextResponse.json(
         { error: 'Invalid username or password' },
         { status: 401 }
@@ -77,8 +59,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        username: user.username,
-        name: user.name,
+        username,
+        name: username,
       },
     });
   } catch (error) {

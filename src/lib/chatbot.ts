@@ -12,6 +12,29 @@ import { PromptConfig, ChatMessage } from './types';
 let promptsCache: PromptConfig | null = null;
 let promptsCacheTime: number = 0;
 const CACHE_TTL = 5000; // 5 seconds cache
+const MAX_CONTEXT_CHARS = 12000;
+
+const embeddings = new GoogleGenerativeAIEmbeddings({
+  apiKey: GOOGLE_API_KEY,
+  modelName: EMBEDDING_MODEL,
+});
+
+const llm = new ChatOpenAI({
+  apiKey: OPENAI_API_KEY,
+  model: MODEL,
+  temperature: 0.2,
+  configuration: {
+    baseURL: OPENAI_BASE_URL,
+  },
+});
+
+const prompt = ChatPromptTemplate.fromMessages([
+  ['system', '{system_prompt}'],
+  new MessagesPlaceholder('chat_history'),
+  ['human', '{input}'],
+]);
+
+const chain = prompt.pipe(llm);
 
 /**
  * Load prompt configuration from prompts.yaml file (async with caching)
@@ -69,11 +92,6 @@ async function retrieveContext(
 ): Promise<Array<{ pageContent: string; metadata: Record<string, unknown> }>> {
   console.log(`Retrieving context for question: ${question.substring(0, 100)}...`);
 
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    apiKey: GOOGLE_API_KEY,
-    modelName: EMBEDDING_MODEL,
-  });
-
   // Generate embedding for the question
   const queryEmbedding = await embeddings.embedQuery(question);
 
@@ -98,6 +116,24 @@ async function retrieveContext(
   return docs;
 }
 
+function buildContextText(docs: Array<{ pageContent: string }>): string {
+  let remaining = MAX_CONTEXT_CHARS;
+  const parts: string[] = [];
+
+  for (const doc of docs) {
+    if (!doc.pageContent) continue;
+    if (doc.pageContent.length <= remaining) {
+      parts.push(doc.pageContent);
+      remaining -= doc.pageContent.length;
+    } else {
+      parts.push(doc.pageContent.slice(0, Math.max(0, remaining)));
+      break;
+    }
+  }
+
+  return parts.join('\n\n');
+}
+
 /**
  * Generate a response to the user's question based on the chat history and vector database
  * @param question - The user's question
@@ -120,31 +156,19 @@ async function getResponse(
   const contextDocs = await retrieveContext(collection, question);
 
   // Build context string from documents
-  const contextText = contextDocs.map((doc) => doc.pageContent).join('\n\n');
+  const contextText = buildContextText(contextDocs);
 
   // Build system prompt with context
   const systemPromptTemplate = `${promptsConfig.system_prompt}\n\n${promptsConfig.context_instruction}\n\nContext from documents:\n####\n${contextText}`;
   console.log(`Using dynamic system prompt from ${PROMPTS_FILE}`);
 
-  const llm = new ChatOpenAI({
-    apiKey: OPENAI_API_KEY,
-    model: MODEL,
-    temperature: 0.2,
-    configuration: {
-      baseURL: OPENAI_BASE_URL,
-    },
-  });
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    ['system', systemPromptTemplate],
-    new MessagesPlaceholder('chat_history'),
-    ['human', '{input}'],
-  ]);
-
   try {
     console.log('Generating response with LLM...');
-    const chain = prompt.pipe(llm);
-    const response = await chain.invoke({ input: question, chat_history: chatHistory });
+    const response = await chain.invoke({
+      input: question,
+      chat_history: chatHistory,
+      system_prompt: systemPromptTemplate,
+    });
     const answer = response.content as string;
 
     console.log(
@@ -280,7 +304,7 @@ export function getChatHistory(sessionId: string): BaseMessage[] {
 export function clearChatHistory(sessionId: string): void {
   if (sessionHistory.has(sessionId)) {
     const oldLength = sessionHistory.get(sessionId)!.length;
-    sessionHistory.set(sessionId, []);
+    sessionHistory.delete(sessionId);
     console.log(`Cleared chat history for session ${sessionId} (${oldLength} messages removed)`);
   } else {
     console.warn(`Attempted to clear non-existent session history: ${sessionId}`);

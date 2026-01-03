@@ -39,6 +39,17 @@ export interface RebuildJob {
 
 // In-memory job tracking (for development; consider Redis for production)
 const rebuildJobs = new Map<string, RebuildJob>();
+const embeddings = new GoogleGenerativeAIEmbeddings({
+  apiKey: GOOGLE_API_KEY,
+  modelName: EMBEDDING_MODEL,
+});
+
+const embeddingFunction = {
+  generate: async (texts: string[]) => {
+    if (texts.length === 0) return [];
+    return embeddings.embedDocuments(texts);
+  }
+};
 
 /**
  * Create a new rebuild job
@@ -203,11 +214,6 @@ export async function getVectorstore(
   // Initialize ChromaDB Cloud client with validation
   const client = await createChromaDBClient();
 
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    apiKey: GOOGLE_API_KEY,
-    modelName: EMBEDDING_MODEL,
-  });
-
   const collectionName = 'health_docs';
   let collection: Collection;
 
@@ -217,14 +223,7 @@ export async function getVectorstore(
     try {
       collection = await client.getCollection({
         name: collectionName,
-        embeddingFunction: {
-          generate: async (texts: string[]) => {
-            const embedResults = await Promise.all(
-              texts.map(text => embeddings.embedQuery(text))
-            );
-            return embedResults;
-          }
-        }
+        embeddingFunction
       });
       console.log('Successfully loaded existing vector database');
       return collection;
@@ -268,14 +267,7 @@ export async function getVectorstore(
       collection = await client.createCollection({
         name: collectionName,
         metadata: { description: 'Women\'s Health Documents Vector Store' },
-        embeddingFunction: {
-          generate: async (texts: string[]) => {
-            const embedResults = await Promise.all(
-              texts.map(text => embeddings.embedQuery(text))
-            );
-            return embedResults;
-          }
-        }
+        embeddingFunction
       });
 
       console.log(`Created collection '${collectionName}'`);
@@ -422,25 +414,13 @@ export async function getOrCreateEmptyCollection(): Promise<Collection> {
   // Initialize ChromaDB Cloud client with validation
   const client = await createChromaDBClient();
 
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    apiKey: GOOGLE_API_KEY,
-    modelName: EMBEDDING_MODEL,
-  });
-
   const collectionName = 'health_docs';
 
   // Try to load existing collection
   try {
     const collection = await client.getCollection({
       name: collectionName,
-      embeddingFunction: {
-        generate: async (texts: string[]) => {
-          const embedResults = await Promise.all(
-            texts.map(text => embeddings.embedQuery(text))
-          );
-          return embedResults;
-        }
-      }
+      embeddingFunction
     });
     const count = await collection.count();
     console.log(`Loaded existing collection with ${count} documents`);
@@ -454,14 +434,7 @@ export async function getOrCreateEmptyCollection(): Promise<Collection> {
     const collection = await client.createCollection({
       name: collectionName,
       metadata: { description: 'Women\'s Health Documents Vector Store' },
-      embeddingFunction: {
-        generate: async (texts: string[]) => {
-          const embedResults = await Promise.all(
-            texts.map(text => embeddings.embedQuery(text))
-          );
-          return embedResults;
-        }
-      }
+      embeddingFunction
     });
 
     console.log(`Created empty collection '${collectionName}'`);
@@ -865,11 +838,6 @@ export async function rebuildAllEmbeddings(
     // Initialize ChromaDB Cloud client with validation
     const client = await createChromaDBClient();
 
-    const embeddings = new GoogleGenerativeAIEmbeddings({
-      apiKey: GOOGLE_API_KEY,
-      modelName: EMBEDDING_MODEL,
-    });
-
     const collectionName = 'health_docs';
 
     // Update progress: Deleting old collection
@@ -904,14 +872,7 @@ export async function rebuildAllEmbeddings(
     const collection = await client.createCollection({
       name: collectionName,
       metadata: { description: 'Women\'s Health Documents Vector Store' },
-      embeddingFunction: {
-        generate: async (texts: string[]) => {
-          const embedResults = await Promise.all(
-            texts.map(text => embeddings.embedQuery(text))
-          );
-          return embedResults;
-        }
-      }
+      embeddingFunction
     });
 
     console.log(`Created collection '${collectionName}'`);
