@@ -1,12 +1,13 @@
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import { CloudClient, Collection } from 'chromadb';
 import { Document } from '@langchain/core/documents';
 import * as path from 'path';
 import {
   DOCS_FOLDER,
-  GOOGLE_API_KEY,
+  OPENAI_API_KEY,
+  OPENAI_EMBEDDING_BASE_URL,
   EMBEDDING_MODEL,
   CHROMADB_API_KEY,
   CHROMADB_TENANT,
@@ -39,9 +40,46 @@ export interface RebuildJob {
 
 // In-memory job tracking (for development; consider Redis for production)
 const rebuildJobs = new Map<string, RebuildJob>();
-const embeddings = new GoogleGenerativeAIEmbeddings({
-  apiKey: GOOGLE_API_KEY,
+const rebuildTrackerInstanceId = `${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const rebuildTrackerLoadedAt = new Date().toISOString();
+
+export interface RebuildJobsDebugInfo {
+  trackerInstanceId: string;
+  pid: number;
+  loadedAt: string;
+  totalJobs: number;
+  recentJobIds: string[];
+}
+
+function getRecentJobIds(limit = 10): string[] {
+  return Array.from(rebuildJobs.keys()).slice(-limit);
+}
+
+export function getRebuildJobsDebugInfo(limit = 10): RebuildJobsDebugInfo {
+  return {
+    trackerInstanceId: rebuildTrackerInstanceId,
+    pid: process.pid,
+    loadedAt: rebuildTrackerLoadedAt,
+    totalJobs: rebuildJobs.size,
+    recentJobIds: getRecentJobIds(limit),
+  };
+}
+
+function logRebuildJobEvent(event: string, details: Record<string, unknown> = {}): void {
+  console.log(`[rebuild-job] ${event}`, {
+    ...getRebuildJobsDebugInfo(),
+    ...details,
+  });
+}
+
+logRebuildJobEvent('job tracker initialized');
+
+const embeddings = new OpenAIEmbeddings({
+  openAIApiKey: OPENAI_API_KEY,
   modelName: EMBEDDING_MODEL,
+  configuration: {
+    baseURL: OPENAI_EMBEDDING_BASE_URL,
+  },
 });
 
 const embeddingFunction = {
@@ -69,6 +107,7 @@ export function createRebuildJob(jobId: string, totalPdfs: number, totalUrls: nu
     startedAt: new Date(),
   };
   rebuildJobs.set(jobId, job);
+  logRebuildJobEvent('job created', { jobId, totalPdfs, totalUrls });
   return job;
 }
 
@@ -86,7 +125,11 @@ export function updateRebuildJob(
 ): void {
   const job = rebuildJobs.get(jobId);
   if (!job) {
-    console.warn(`Job ${jobId} not found`);
+    console.warn(`[rebuild-job] update skipped; job not found`, {
+      ...getRebuildJobsDebugInfo(),
+      jobId,
+      updates,
+    });
     return;
   }
 
@@ -104,13 +147,36 @@ export function updateRebuildJob(
   }
 
   rebuildJobs.set(jobId, job);
+  logRebuildJobEvent('job updated', {
+    jobId,
+    status: job.status,
+    percentage: job.progress.percentage,
+    currentStep: job.progress.currentStep,
+    hasError: Boolean(job.error),
+    completedAt: job.completedAt?.toISOString(),
+  });
 }
 
 /**
  * Get rebuild job status
  */
 export function getRebuildJob(jobId: string): RebuildJob | undefined {
-  return rebuildJobs.get(jobId);
+  const job = rebuildJobs.get(jobId);
+  if (!job) {
+    console.warn('[rebuild-job] get failed; job not found', {
+      ...getRebuildJobsDebugInfo(),
+      requestedJobId: jobId,
+    });
+  } else {
+    console.log('[rebuild-job] get success', {
+      ...getRebuildJobsDebugInfo(),
+      requestedJobId: jobId,
+      status: job.status,
+      percentage: job.progress.percentage,
+      currentStep: job.progress.currentStep,
+    });
+  }
+  return job;
 }
 
 /**
@@ -118,11 +184,15 @@ export function getRebuildJob(jobId: string): RebuildJob | undefined {
  */
 export function cleanupOldJobs(): void {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  let removed = 0;
   for (const [jobId, job] of rebuildJobs.entries()) {
     if ((job.status === 'completed' || job.status === 'error') && job.completedAt && job.completedAt < oneHourAgo) {
       rebuildJobs.delete(jobId);
+      removed++;
     }
   }
+
+  logRebuildJobEvent('cleanup completed', { removed, cutoff: oneHourAgo.toISOString() });
 }
 
 /**
@@ -715,7 +785,7 @@ export async function addPdfDocument(
           // Handle other primitive metadata fields
           for (const [key, value] of Object.entries(doc.metadata)) {
             if (key === 'source' || key === 'loc' || key === 'pdf' || key === 'filename' ||
-                key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
+              key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
               continue;
             }
 
@@ -947,7 +1017,7 @@ export async function rebuildAllEmbeddings(
 
             for (const [key, value] of Object.entries(doc.metadata)) {
               if (key === 'source' || key === 'loc' || key === 'pdf' || key === 'filename' ||
-                  key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
+                key === 'chunkIndex' || key === 'totalChunks' || key === 'chunkSize') {
                 continue;
               }
 

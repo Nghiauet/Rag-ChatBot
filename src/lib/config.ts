@@ -7,12 +7,13 @@ export const VECTOR_DB_PATH = path.join(process.cwd(), 'data', 'vector_db');
 export const PROMPTS_FILE = path.join(process.cwd(), 'data', 'prompts.yaml');
 
 // Environment variables
-export const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || '';
-export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || GOOGLE_API_KEY;
+export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 export const OPENAI_BASE_URL =
-  process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
-export const MODEL = process.env.MODEL || 'models/gemini-flash-latest';
-export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'models/embedding-001';
+  process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+export const OPENAI_EMBEDDING_BASE_URL =
+  process.env.OPENAI_EMBEDDING_BASE_URL || OPENAI_BASE_URL;
+export const MODEL = process.env.MODEL || 'gpt-4';
+export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
 export const BASIC_AUTH_USERNAME = process.env.BASIC_AUTH_USERNAME || '';
 export const BASIC_AUTH_PASSWORD = process.env.BASIC_AUTH_PASSWORD || '';
 

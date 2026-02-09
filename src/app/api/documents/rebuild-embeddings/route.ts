@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DOCS_FOLDER } from '@/lib/config';
-import { rebuildAllEmbeddings, createRebuildJob, cleanupOldJobs } from '@/lib/vectordb';
+import { rebuildAllEmbeddings, createRebuildJob, cleanupOldJobs, getRebuildJobsDebugInfo } from '@/lib/vectordb';
 import { setVectordbInstance } from '@/lib/sessionManager';
 import { UrlDocument } from '@/lib/types';
 import { randomUUID } from 'crypto';
@@ -40,7 +40,9 @@ async function writeUrls(urls: UrlDocument[]): Promise<void> {
  * Returns immediately with a jobId for status polling
  */
 export async function POST() {
-  console.log('Starting embeddings rebuild process for ALL documents...');
+  console.log('[rebuild-route] starting embeddings rebuild process for ALL documents', {
+    ...getRebuildJobsDebugInfo(),
+  });
 
   try {
     // Clean up old jobs
@@ -66,10 +68,20 @@ export async function POST() {
 
     // Generate unique job ID
     const jobId = randomUUID();
-    console.log(`Created rebuild job with ID: ${jobId}`);
+    console.log('[rebuild-route] created rebuild job id', {
+      jobId,
+      pdfCount: pdfFiles.length,
+      fetchedUrlCount: fetchedUrls.length,
+      ...getRebuildJobsDebugInfo(),
+    });
 
     // Create job tracking entry
     const job = createRebuildJob(jobId, pdfFiles.length, fetchedUrls.length);
+    console.log('[rebuild-route] job registered in tracker', {
+      jobId,
+      status: job.status,
+      ...getRebuildJobsDebugInfo(),
+    });
 
     // Start background processing (don't await)
     processRebuildInBackground(jobId, pdfFiles, fetchedUrls, urlDocuments).catch(error => {
@@ -102,7 +114,12 @@ async function processRebuildInBackground(
   urlDocuments: UrlDocument[]
 ) {
   try {
-    console.log(`Background processing started for job ${jobId}`);
+    console.log('[rebuild-route] background processing started', {
+      jobId,
+      pdfCount: pdfFiles.length,
+      fetchedUrlCount: fetchedUrls.length,
+      ...getRebuildJobsDebugInfo(),
+    });
 
     // Rebuild vector database with ALL documents (PDFs + URLs)
     const vectordb = await rebuildAllEmbeddings(pdfFiles, fetchedUrls, jobId);
@@ -118,9 +135,16 @@ async function processRebuildInBackground(
 
     // Update the global instance with the rebuilt collection
     setVectordbInstance(vectordb);
-    console.log(`Background rebuild completed for job ${jobId}`);
+    console.log('[rebuild-route] background rebuild completed', {
+      jobId,
+      ...getRebuildJobsDebugInfo(),
+    });
   } catch (error) {
-    console.error(`Background rebuild failed for job ${jobId}:`, error);
+    console.error('[rebuild-route] background rebuild failed', {
+      jobId,
+      ...getRebuildJobsDebugInfo(),
+      error,
+    });
     // Error is already tracked in rebuildAllEmbeddings via updateRebuildJob
   }
 }

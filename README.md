@@ -20,7 +20,7 @@ A specialized chatbot application for women's health information powered by Next
 - **AI/ML**:
   - LangChain.js for RAG orchestration
   - Google Gemini (gemini-flash-lite-latest) for chat
-  - Google text-embedding-004 for embeddings
+  - Google Gemini embedding (gemini-embedding-001)
 - **Vector Database**: ChromaDB Cloud
 - **Styling**: Tailwind CSS 4
 - **State Management**: React Context API
@@ -57,7 +57,7 @@ GOOGLE_API_KEY=your-google-api-key-here
 
 # Model Configuration
 MODEL=models/gemini-flash-lite-latest
-EMBEDDING_MODEL=models/text-embedding-004
+EMBEDDING_MODEL=models/gemini-embedding-001
 
 # ChromaDB Cloud Configuration
 CHROMADB_API_KEY=your-chromadb-api-key

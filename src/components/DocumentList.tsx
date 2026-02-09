@@ -116,7 +116,20 @@ export default function DocumentList({ refreshTrigger }: DocumentListProps) {
           });
         }
       } catch (error) {
-        console.error('Error polling rebuild status:', error);
+        const err = error as {
+          message?: string;
+          response?: {
+            status?: number;
+            data?: unknown;
+          };
+        };
+        console.error('Error polling rebuild status', {
+          jobId,
+          attempt: attempts,
+          message: err.message,
+          status: err.response?.status,
+          responseData: err.response?.data,
+        });
         // Continue polling on error (might be temporary network issue)
         if (attempts >= maxAttempts) {
           if (pollingIntervalRef.current) {

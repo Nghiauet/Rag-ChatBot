@@ -1,11 +1,10 @@
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage, HumanMessage, BaseMessage } from '@langchain/core/messages';
-import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { Collection } from 'chromadb';
 import * as fs from 'fs/promises';
 import * as yaml from 'js-yaml';
-import { PROMPTS_FILE, GOOGLE_API_KEY, MODEL, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL } from './config';
+import { PROMPTS_FILE, MODEL, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_EMBEDDING_BASE_URL } from './config';
 import { PromptConfig, ChatMessage } from './types';
 
 // Cache prompts to avoid reading file on every request
@@ -14,9 +13,12 @@ let promptsCacheTime: number = 0;
 const CACHE_TTL = 5000; // 5 seconds cache
 const MAX_CONTEXT_CHARS = 12000;
 
-const embeddings = new GoogleGenerativeAIEmbeddings({
-  apiKey: GOOGLE_API_KEY,
+const embeddings = new OpenAIEmbeddings({
+  openAIApiKey: OPENAI_API_KEY,
   modelName: EMBEDDING_MODEL,
+  configuration: {
+    baseURL: OPENAI_EMBEDDING_BASE_URL,
+  },
 });
 
 const llm = new ChatOpenAI({

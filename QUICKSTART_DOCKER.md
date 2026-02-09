@@ -31,7 +31,7 @@ Edit `.env` with your credentials:
 # Google AI Configuration
 GOOGLE_API_KEY=your_google_api_key_here        # From https://aistudio.google.com/app/apikey
 MODEL=gemini-1.5-flash                          # Or gemini-1.5-pro for better quality
-EMBEDDING_MODEL=models/embedding-001
+EMBEDDING_MODEL=models/gemini-embedding-001
 
 # ChromaDB Cloud Configuration
 CHROMADB_API_KEY=your_chromadb_api_key         # From ChromaDB Cloud dashboard
